@@ -31,7 +31,7 @@ def opt(params: dict, key: str, default):
 
 def preview_table(gdf, limit: int = 10) -> dict:
     """结果预览表：前 limit 行、非几何列（最多 12 列），全部走 json_safe。"""
-    from geocore.protocol import json_safe
+    from claude_gis.protocol import json_safe
 
     cols = [c for c in gdf.columns if c != gdf.geometry.name][:12]
     rows = gdf[cols].head(limit).to_dict("records") if cols else []

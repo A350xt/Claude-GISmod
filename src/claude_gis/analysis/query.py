@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from geocore.analysis.common import StepResult, need, opt
-from geocore.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GeoCoreError, json_safe
-from geocore.providers.geostack import PROVIDER
+from claude_gis.analysis.common import StepResult, need, opt
+from claude_gis.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GisError, json_safe
+from claude_gis.providers.geostack import PROVIDER
 
 GROUP_TABLE_LIMIT = 50
 
@@ -50,7 +50,7 @@ def handle_measure(resolver, params: dict, step_id: str) -> StepResult:
     if group_by:
         group_by = str(group_by)
         if group_by not in out.columns:
-            raise GeoCoreError(
+            raise GisError(
                 E_INPUT_MISSING,
                 f"分组字段不存在：{group_by}",
                 {"columns": [str(c) for c in out.columns]},

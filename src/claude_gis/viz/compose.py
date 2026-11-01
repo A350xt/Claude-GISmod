@@ -33,7 +33,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyArrow, Patch, Rectangle  # noqa: E402
 
-from geocore.viz.map import _fmt_val  # noqa: E402
+from claude_gis.viz.map import _fmt_val  # noqa: E402
 
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -67,8 +67,8 @@ def _rect(el: dict) -> tuple[float, float, float, float]:
 
 def _load_sources(store, layers: list):
     """图层引用 → (gdf | RasterFrame, style)。复用 resolver 的 CRS 对齐。"""
-    from geocore.analysis.resolver import DatasetResolver
-    from geocore.raster_core import RasterFrame
+    from claude_gis.analysis.resolver import DatasetResolver
+    from claude_gis.raster_core import RasterFrame
 
     resolver = DatasetResolver(store, crs_override="source")
     out = []
@@ -93,8 +93,8 @@ def _plot_layer(ax, obj, spec: dict):
     import geopandas as gpd
     import numpy as np
 
-    from geocore.raster_core import RasterFrame
-    from geocore.viz.map import _fmt_val
+    from claude_gis.raster_core import RasterFrame
+    from claude_gis.viz.map import _fmt_val
 
     mode = str(spec.get("mode", "single")).lower()
     alpha = float(spec.get("alpha", 1.0))
@@ -155,8 +155,8 @@ def _legend_items(store, layers: list) -> list:
     """(label, 颜色或渐变说明) 列表：single→色块；categorical→逐类；raster→色带说明。"""
     import numpy as np
 
-    from geocore.raster_core import RasterFrame, load_raster
-    from geocore.viz.map import _fmt_val
+    from claude_gis.raster_core import RasterFrame, load_raster
+    from claude_gis.viz.map import _fmt_val
 
     items = []
     for spec in layers or []:
@@ -171,7 +171,7 @@ def _legend_items(store, layers: list) -> list:
                 else:
                     items.append((f"{label}（{spec.get('cmap', 'viridis')} 色带）", "ramp"))
                 continue
-            gdf, _ = __import__("geocore.runtime.datasource", fromlist=["load_dataset"]).load_dataset(
+            gdf, _ = __import__("claude_gis.runtime.datasource", fromlist=["load_dataset"]).load_dataset(
                 str(spec["source"]))
             if mode in ("categorical", "category") and spec.get("field") in gdf.columns:
                 for c in sorted(gdf[spec["field"]].fillna("<空>").astype(str).unique()):
@@ -234,7 +234,7 @@ def render_composition(store, spec: dict, *, out_path: Path, dpi: int = 200) -> 
         else:
             import geopandas as gpd
 
-            from geocore.raster_core import RasterFrame
+            from claude_gis.raster_core import RasterFrame
 
             bounds = []
             for obj, _ in objs:

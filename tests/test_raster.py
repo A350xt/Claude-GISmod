@@ -9,10 +9,10 @@ import numpy as np
 import pytest
 from shapely.geometry import Point, Polygon
 
-from geocore import api
-from geocore.analysis.executor import execute_analyze
-from geocore.protocol import GeoCoreError
-from geocore.raster_core import load_raster
+from claude_gis import api
+from claude_gis.analysis.executor import execute_analyze
+from claude_gis.protocol import GisError
+from claude_gis.raster_core import load_raster
 
 
 # ------------------------------------------------------------------ fixtures
@@ -230,7 +230,7 @@ def test_calc_whitelist(square, tmp_path):
     rf = load_raster(r["result"]["path"])
     assert set(np.unique(rf.data[np.isfinite(rf.data)])) == {21.0, 41.0}
 
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         _op(tmp_path, [
             {"id": "g", "op": "raster.from_vector", "input": str(square), "cellsize": 1.0},
             {"id": "x", "op": "raster.calc", "inputs": {"a": "@g"},
@@ -371,7 +371,7 @@ def test_inspect_and_visualize_raster(square, tmp_path):
 
 
 def test_vector_op_rejects_raster(square, tmp_path):
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         _op(tmp_path, [
             {"id": "g", "op": "raster.from_vector", "input": str(square), "cellsize": 1.0},
             {"id": "f", "op": "query.filter", "input": "@g", "where": "v >= 1"},

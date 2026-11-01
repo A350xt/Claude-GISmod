@@ -1,11 +1,11 @@
 import { expect, test } from 'claude-code/testing'
 
 const PANE = {
-  plugin: 'geocore',
+  plugin: 'gismod',
   component: 'Pane',
-  requestId: 'geocore',
+  requestId: 'gis',
   props: {
-    title: 'GeoCore',
+    title: 'GIS',
     isFocused: false,
     bodyColumns: 60,
     placement: 'dock',
@@ -45,8 +45,8 @@ const INVENTORY = {
 }
 
 function engine(on: Parameters<Parameters<typeof test>[1]>[1], requests: unknown[], failWith?: string) {
-  on('command.register', () => ({ value: { command: 'geocore' } }))
-  on('tool.register', (_, e) => ({ value: { tool: `mcp__geocore__${(e as { name: string }).name}` } }))
+  on('command.register', () => ({ value: { command: 'gis' } }))
+  on('tool.register', (_, e) => ({ value: { tool: `mcp__gismod__${(e as { name: string }).name}` } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('env.get', () => ({ value: undefined }))
@@ -94,7 +94,7 @@ test('inspect 工具把请求交给 Python 内核并返回结果', async ($, on)
   engine(on, requests)
   await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
 
-  const ran = await $.tool.call({ tool: 'mcp__geocore__inspect', path: '/w/roads.geojson' })
+  const ran = await $.tool.call({ tool: 'mcp__gismod__inspect', path: '/w/roads.geojson' })
   expect(String(ran.result)).toContain('"count":22')
   expect(requests[0]).toEqual({ action: 'inspect', path: '/w/roads.geojson' })
 })
@@ -103,7 +103,7 @@ test('内核报错时工具拒绝并带上错误码', async ($, on) => {
   engine(on, [], 'E_INPUT_MISSING')
   await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
 
-  const ran = await $.tool.call({ tool: 'mcp__geocore__inspect', path: '/nope.geojson' })
+  const ran = await $.tool.call({ tool: 'mcp__gismod__inspect', path: '/nope.geojson' })
   expect(String(ran.deny ?? ran.text)).toContain('E_INPUT_MISSING')
 })
 

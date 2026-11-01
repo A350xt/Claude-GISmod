@@ -1,4 +1,4 @@
-"""Public API used by the CLI (`python -m geocore run`)."""
+"""Public API used by the CLI (`python -m claude_gis run`)."""
 
 from __future__ import annotations
 
@@ -7,24 +7,24 @@ from pathlib import Path
 
 import pandas as pd
 
-from geocore.analysis.executor import OP_HANDLERS, execute_analyze
-from geocore.protocol import (
+from claude_gis.analysis.executor import OP_HANDLERS, execute_analyze
+from claude_gis.protocol import (
     E_BAD_REQUEST,
     E_INPUT_MISSING,
     E_OUTPUT_ERROR,
-    GeoCoreError,
+    GisError,
     json_safe,
 )
-from geocore.runtime.artifact import ArtifactStore
-from geocore.runtime.datasource import load_dataset
-from geocore.runtime.prepare import assume_missing_crs
+from claude_gis.runtime.artifact import ArtifactStore
+from claude_gis.runtime.datasource import load_dataset
+from claude_gis.runtime.prepare import assume_missing_crs
 
 
 def inspect(payload: dict) -> dict:
     """Understand a dataset without analyzing it."""
     path = str(payload.get("path") or "")
     if Path(path).suffix.lower() in (".tif", ".tiff"):
-        from geocore.raster_core import raster_meta_of
+        from claude_gis.raster_core import raster_meta_of
 
         meta = raster_meta_of(path)
         return {
@@ -95,14 +95,14 @@ def analyze(workdir: Path, payload: dict) -> dict:
 
 
 def visualize(workdir: Path, payload: dict) -> dict:
-    from geocore.analysis.resolver import DatasetResolver
-    from geocore.raster_core import is_raster_path
-    from geocore.runtime.artifact import is_artifact_token
-    from geocore.viz.map import render_map
+    from claude_gis.analysis.resolver import DatasetResolver
+    from claude_gis.raster_core import is_raster_path
+    from claude_gis.runtime.artifact import is_artifact_token
+    from claude_gis.viz.map import render_map
 
     source = str(payload.get("source") or "")
     style = dict(payload.get("style") or {})
-    title = str(payload.get("title") or style.get("title") or "GeoCore 地图")
+    title = str(payload.get("title") or style.get("title") or "GIS 地图")
     base = payload.get("base")
     base_style = dict(payload.get("base_style") or {}) if base else None
 
@@ -128,7 +128,7 @@ def visualize(workdir: Path, payload: dict) -> dict:
 
     if _is_raster_source(store, source):
         # 栅格制图：连续色带拉伸 / 分类色表
-        from geocore.viz.map import render_raster
+        from claude_gis.viz.map import render_raster
 
         rf, _ = resolver.raster(source)
         legend = render_raster(rf, style=style, out_path=out_path, title=title)
@@ -157,7 +157,7 @@ def visualize(workdir: Path, payload: dict) -> dict:
 
 def compose(workdir: Path, payload: dict) -> dict:
     """版面合成：多图层 + 图例/比例尺/指北针的成品版面 PNG。"""
-    from geocore.viz.compose import render_composition
+    from claude_gis.viz.compose import render_composition
 
     spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else payload
     title = str(spec.get("title") or payload.get("title") or "制图")
@@ -183,7 +183,7 @@ def show(workdir: Path, artifact_id: str) -> dict:
     meta = store.get(str(artifact_id))
     listed = store.list_ids()
     if meta["artifact_id"] not in listed:
-        raise GeoCoreError(E_INPUT_MISSING, "Artifact 索引异常", {"id": artifact_id})
+        raise GisError(E_INPUT_MISSING, "Artifact 索引异常", {"id": artifact_id})
     return meta
 
 
@@ -197,9 +197,9 @@ def list_operations() -> dict:
 
 def _is_raster_source(store: ArtifactStore, tok: str) -> bool:
     """来源是否为栅格：.tif 路径 / 栅格产物 / 栅格中间步骤。"""
-    from geocore.analysis.resolver import parse_step_ref
-    from geocore.raster_core import is_raster_path
-    from geocore.runtime.artifact import is_artifact_token
+    from claude_gis.analysis.resolver import parse_step_ref
+    from claude_gis.raster_core import is_raster_path
+    from claude_gis.runtime.artifact import is_artifact_token
 
     if is_raster_path(tok):
         return True
@@ -225,12 +225,12 @@ def preview(workdir: Path, payload: dict) -> dict:
     import geopandas as gpd
     from shapely.geometry import box
 
-    from geocore.analysis.resolver import DatasetResolver
-    from geocore.viz import preview as pv
+    from claude_gis.analysis.resolver import DatasetResolver
+    from claude_gis.viz import preview as pv
 
     source = str(payload.get("source") or "")
     if not source:
-        raise GeoCoreError(E_BAD_REQUEST, "preview 需要 source（路径或 artifact_id）")
+        raise GisError(E_BAD_REQUEST, "preview 需要 source（路径或 artifact_id）")
     want_png = bool(payload.get("png"))
     crs_req = str(payload.get("crs") or "source")
     store = ArtifactStore(Path(workdir))
@@ -344,7 +344,7 @@ def list_inventory(workdir: Path, payload: dict) -> dict:
     for artifact_id in store.list_ids():
         try:
             meta = store.get(artifact_id)
-        except GeoCoreError:
+        except GisError:
             out["skipped_corrupt"] += 1
             continue
         metas.append(meta)

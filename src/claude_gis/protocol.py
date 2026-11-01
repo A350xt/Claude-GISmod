@@ -24,7 +24,7 @@ E_OUTPUT_ERROR = "E_OUTPUT_ERROR"                  # failed writing artifact/map
 E_INTERNAL = "E_INTERNAL"                          # unexpected failure
 
 
-class GeoCoreError(Exception):
+class GisError(Exception):
     """Domain error carrying a stable wire code."""
 
     def __init__(self, code: str, message: str, details: dict[str, Any] | None = None):
@@ -91,6 +91,6 @@ def error_envelope(code: str, message: str, details: dict[str, Any] | None = Non
 
 
 def envelope_from_exception(exc: Exception) -> dict[str, Any]:
-    if isinstance(exc, GeoCoreError):
+    if isinstance(exc, GisError):
         return error_envelope(exc.code, exc.message, exc.details)
     return error_envelope(E_INTERNAL, f"{type(exc).__name__}: {exc}")

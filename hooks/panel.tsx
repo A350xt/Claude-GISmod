@@ -1,7 +1,7 @@
 /**
- * GeoCore 侧边面板。
+ * Claude-GISmod 侧边面板。
  *
- *   GeoCore                           [刷新]
+ *   Claude-GISmod                     [刷新]
  *   3 个数据集 · 2 个结果 · …/workdir
  *   [数据集 3] [分析结果 2]
  *   ┌ 列表 ───────────────────────────┐
@@ -18,7 +18,7 @@ import type { GeoArtifact, GeoDataset, GeoPreview } from '../types'
 import type { KernelConfig } from './kernel'
 import { readPanelState, refreshInventory, selectSource, setCrs, setTab } from './store'
 
-export const PANE_ID = 'geocore'
+export const PANE_ID = 'gis'
 const LIST_ROWS = 8
 
 /** 可切换的显示坐标系 */
@@ -67,7 +67,7 @@ export async function renderPanel($: EngineInterface, e: RenderInput<'Pane'>, cf
     <Box flexDirection="column" marginBottom={1}>
       <Box flexDirection="row" justifyContent="space-between" alignItems="center">
         <Text bold size="title" weight="bold">
-          GeoCore
+          Claude-GISmod
         </Text>
         <Button key="refresh" label={s.busy ? '读取中…' : '↻ 刷新'} onPress={() => refreshInventory($, cfg())} />
       </Box>
@@ -349,11 +349,11 @@ function previewCard(
           label={isArtifact ? '接着分析' : '让 Claude 分析'}
           onPress={fill(
             isArtifact
-              ? `基于 GeoCore 结果 ${pv.source}（${pv.label}）继续分析：`
-              : `用 GeoCore 看一下 ${pv.source}，说说这份数据的内容和能做哪些分析。`,
+              ? `基于 GIS 结果 ${pv.source}（${pv.label}）继续分析：`
+              : `用 GIS 工具看一下 ${pv.source}，说说这份数据的内容和能做哪些分析。`,
           )}
         />
-        <Button key="ask-map" label="出专题图" onPress={fill(`用 GeoCore 把 ${pv.source} 画成专题图：`)} />
+        <Button key="ask-map" label="出专题图" onPress={fill(`用 GIS 工具把 ${pv.source} 画成专题图：`)} />
       </Box>
     </Box>
   )

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from geocore.analysis.common import StepResult, need, opt
-from geocore.providers.geostack import PROVIDER
+from claude_gis.analysis.common import StepResult, need, opt
+from claude_gis.providers.geostack import PROVIDER
 
 _KIND_LABEL = {"point": "点要素", "line": "线要素", "polygon": "面要素"}
 

@@ -15,7 +15,7 @@ import geopandas as gpd
 import pytest
 
 from conftest import REPO
-from geocore.analysis.executor import execute_analyze
+from claude_gis.analysis.executor import execute_analyze
 
 DATA = REPO / "datasets" / "synthetic"
 BENCH = Path(__file__).parent / "bench" / "starter.jsonl"

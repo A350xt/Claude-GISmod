@@ -1,5 +1,5 @@
 /**
- * 模型可见的三个 GIS 工具：mcp__geocore__inspect / analyze / visualize。
+ * 模型可见的三个 GIS 工具：mcp__gismod__inspect / analyze / visualize。
  *
  * 治理铁律：工具面只有这三个。新能力进 analyze 的操作词表，不新增工具。
  */
@@ -44,7 +44,7 @@ export const TOOLS: GeoTool[] = [
     spec: {
       name: 'inspect',
       description: [
-        'GeoCore：理解一份空间数据（不做分析）。遇到陌生地理数据，先 inspect 再分析。',
+        'GIS：理解一份空间数据（不做分析）。遇到陌生地理数据，先 inspect 再分析。',
         '支持 GeoJSON / GeoPackage / Shapefile / CSV（含经纬度列）/ GeoTIFF。',
         '返回几何类型、CRS、范围、要素数、字段与样本值、质量告警（无效几何/缺 CRS）与可做的分析类别。',
       ].join('\n'),
@@ -64,7 +64,7 @@ export const TOOLS: GeoTool[] = [
     spec: {
       name: 'analyze',
       description: [
-        'GeoCore：执行空间分析。按顺序运行 operations 中的 GIS 原语步骤，后一步可用 "@步骤id" 引用前一步结果。',
+        'GIS：执行空间分析。按顺序运行 operations 中的 GIS 原语步骤，后一步可用 "@步骤id" 引用前一步结果。',
         '',
         OPS,
         '',
@@ -109,7 +109,7 @@ export const TOOLS: GeoTool[] = [
     spec: {
       name: 'visualize',
       description: [
-        'GeoCore：把数据或分析结果画成专题地图 PNG（分析用 analyze，表达用本工具）。',
+        'GIS：把数据或分析结果画成专题地图 PNG（分析用 analyze，表达用本工具）。',
         'source：artifact_id、artifact_id#步骤id 或数据文件路径。',
         '矢量 style.mode ∈ single / point / categorical / choropleth：',
         '- choropleth 需 style.field 为数值列，classification ∈ quantile/equal_interval，classes 2–9，cmap 如 YlOrRd；',

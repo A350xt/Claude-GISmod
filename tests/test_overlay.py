@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from geocore.analysis.overlay import (handle_clip, handle_difference,
+from claude_gis.analysis.overlay import (handle_clip, handle_difference,
                                       handle_intersection, handle_union)
-from geocore.analysis.resolver import DatasetResolver
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis.analysis.resolver import DatasetResolver
+from claude_gis.runtime.artifact import ArtifactStore
 
 from helpers import write
 

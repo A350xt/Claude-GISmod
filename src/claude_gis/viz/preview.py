@@ -49,7 +49,7 @@ def resolve_display_crs(crs_in, request: str | None, sample_gdf=None):
     """把请求的显示坐标系解析成 pyproj.CRS；"source"/空 = 源坐标系，"utm" = 按范围选 UTM。"""
     from pyproj import CRS
 
-    from geocore.protocol import E_BAD_REQUEST, GeoCoreError
+    from claude_gis.protocol import E_BAD_REQUEST, GisError
 
     req = (request or "source").strip()
     if req.lower() in ("", "source", "源"):
@@ -61,7 +61,7 @@ def resolve_display_crs(crs_in, request: str | None, sample_gdf=None):
     try:
         return CRS.from_user_input(req)
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"无法识别的坐标系：{req}",
+        raise GisError(E_BAD_REQUEST, f"无法识别的坐标系：{req}",
                            {"hint": "可用 source / utm / EPSG:4326 / EPSG:4490 / EPSG:3857 等"}) from exc
 
 
@@ -319,7 +319,7 @@ def reproject_raster(rf, dst_crs):
     """把栅格重投影到 dst_crs（像元数不变量级）；同 CRS 原样返回。"""
     from pyproj import CRS
 
-    from geocore.raster_core import RasterFrame, reproject_rf
+    from claude_gis.raster_core import RasterFrame, reproject_rf
 
     if dst_crs is None or rf.crs is None or CRS.from_user_input(rf.crs) == dst_crs:
         return rf

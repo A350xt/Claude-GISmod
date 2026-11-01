@@ -6,7 +6,7 @@ import re
 
 import geopandas as gpd
 
-from geocore.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_INPUT_MISSING, GeoCoreError
+from claude_gis.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_INPUT_MISSING, GisError
 
 _SAFE_QUERY_TOKENS = re.compile(r"\b(import|exec|eval|open|__|getattr|setattr|system)\b")
 
@@ -42,7 +42,7 @@ _POLYGONY = {"Polygon", "MultiPolygon"}
 def _require_nonempty(*gdfs, label: str) -> None:
     for pos, gdf in enumerate(gdfs):
         if gdf is None or len(gdf) == 0:
-            raise GeoCoreError(
+            raise GisError(
                 E_EMPTY_RESULT,
                 f"{label}: 输入为空，无法继续运算（第 {pos + 1} 个输入）",
                 {"position": pos},
@@ -56,7 +56,7 @@ def _geom_family(types: set[str]) -> str:
         return "line"
     if types <= _POLYGONY:
         return "polygon"
-    raise GeoCoreError(
+    raise GisError(
         E_BAD_REQUEST,
         f"几何类型混杂（{sorted(types)}），Phase 1 单步运算要求同族几何",
         {"types": sorted(types)},
@@ -70,14 +70,14 @@ class GeoStackProvider:
 
     def filter_attributes(self, gdf: gpd.GeoDataFrame, where: str) -> gpd.GeoDataFrame:
         if not isinstance(where, str) or not where.strip():
-            raise GeoCoreError(E_BAD_REQUEST, "filter 需要非空 where 表达式")
+            raise GisError(E_BAD_REQUEST, "filter 需要非空 where 表达式")
         if _SAFE_QUERY_TOKENS.search(where.lower()):
-            raise GeoCoreError(E_BAD_REQUEST, "where 含不允许的语法", {"where": where})
+            raise GisError(E_BAD_REQUEST, "where 含不允许的语法", {"where": where})
         frame, translated = _with_backticked_aliases(gdf, where)
         try:
             return frame.query(translated, engine="python").copy()
         except Exception as exc:
-            raise GeoCoreError(
+            raise GisError(
                 E_BAD_REQUEST,
                 f"where 表达式无效:{exc}",
                 {"where": where, "grammar": "pandas query 语法；`反引号` 包裹的列名会自动改写"},
@@ -85,7 +85,7 @@ class GeoStackProvider:
 
     def select_spatial(self, gdf: gpd.GeoDataFrame, predicate: str, ref: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         if predicate not in SPATIAL_PREDICATES:
-            raise GeoCoreError(E_BAD_REQUEST, f"未知空间谓词:{predicate}", {"allowed": list(SPATIAL_PREDICATES)})
+            raise GisError(E_BAD_REQUEST, f"未知空间谓词:{predicate}", {"allowed": list(SPATIAL_PREDICATES)})
         ref_union = ref.union_all()
         mask = getattr(gdf.geometry, predicate)(ref_union)
         return gdf[mask.fillna(False)].copy()
@@ -94,7 +94,7 @@ class GeoStackProvider:
         allowed = {"area_sqkm", "area_ha", "length_km", "count"}
         bad = set(measures) - allowed
         if bad:
-            raise GeoCoreError(E_BAD_REQUEST, f"未知度量:{sorted(bad)}", {"allowed": sorted(allowed)})
+            raise GisError(E_BAD_REQUEST, f"未知度量:{sorted(bad)}", {"allowed": sorted(allowed)})
         fam = _geom_family(set(map(str, gdf.geometry.geom_type)))
         out = gdf.copy()
         totals: dict[str, float] = {}
@@ -104,14 +104,14 @@ class GeoStackProvider:
                 continue
             if m.startswith("area"):
                 if fam != "polygon":
-                    raise GeoCoreError(E_BAD_REQUEST, "面积度量仅适用于面要素")
+                    raise GisError(E_BAD_REQUEST, "面积度量仅适用于面要素")
                 sqkm = out.geometry.area / 1e6
                 col = m if m not in out.columns else m + "_calc"
                 out[col] = sqkm
                 totals[m + "_sum"] = float(sqkm.sum())
             else:
                 if fam != "line":
-                    raise GeoCoreError(E_BAD_REQUEST, "长度度量仅适用于线要素")
+                    raise GisError(E_BAD_REQUEST, "长度度量仅适用于线要素")
                 km = out.geometry.length / 1000.0
                 col = m if m not in out.columns else m + "_calc"
                 out[col] = km
@@ -149,13 +149,13 @@ class GeoStackProvider:
 
         n_left, n_right = len(gdf), len(ref)
         if n_left == 0 or n_right == 0:
-            raise GeoCoreError(
+            raise GisError(
                 E_EMPTY_RESULT,
                 "nearest：输入或参照层为空，无法计算最近邻",
                 {"n_left": n_left, "n_right": n_right},
             )
         if n_left * n_right > 25_000_000:
-            raise GeoCoreError(
+            raise GisError(
                 E_BAD_REQUEST,
                 f"最近邻规模过大：{n_left}×{n_right}；请先缩小输入范围",
                 {"n_left": n_left, "n_right": n_right},
@@ -227,11 +227,11 @@ class GeoStackProvider:
         known = {"count", "sum", "mean", "min", "max", "total_length_km", "total_area_sqkm", "share_pct"}
         unknown = wanted - known
         if unknown:
-            raise GeoCoreError(E_BAD_REQUEST, f"未知统计量:{sorted(unknown)}", {"known": sorted(known)})
+            raise GisError(E_BAD_REQUEST, f"未知统计量:{sorted(unknown)}", {"known": sorted(known)})
         if ({"sum", "mean"} & wanted) and not field:
-            raise GeoCoreError(E_BAD_REQUEST, "sum/mean 统计需要提供 field 字段名")
+            raise GisError(E_BAD_REQUEST, "sum/mean 统计需要提供 field 字段名")
         if field and field not in data.columns:
-            raise GeoCoreError(E_INPUT_MISSING, f"字段不存在:{field}", {"columns": list(map(str, data.columns))})
+            raise GisError(E_INPUT_MISSING, f"字段不存在:{field}", {"columns": list(map(str, data.columns))})
 
         if fam == "point":
             return self._zonal_points(regions, data, wanted, field)

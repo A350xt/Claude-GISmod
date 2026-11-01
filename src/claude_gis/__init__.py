@@ -1,4 +1,4 @@
-"""GeoCore — agent-native GIS runtime (Python kernel)."""
+"""claude_gis — Claude-GISmod 的 Python 内核：无状态的 agent-native GIS 运行时。"""
 
 import os as _os
 import sys as _sys
@@ -17,4 +17,4 @@ def _drop_foreign_proj_env() -> None:
 
 _drop_foreign_proj_env()
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

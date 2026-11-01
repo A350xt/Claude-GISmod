@@ -21,11 +21,11 @@ from pathlib import Path
 
 import geopandas as gpd
 
-from geocore.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GeoCoreError
-from geocore.raster_core import RasterFrame, load_raster, reproject_rf
-from geocore.runtime.artifact import is_artifact_token
-from geocore.runtime.datasource import load_dataset
-from geocore.runtime.prepare import assume_missing_crs, estimate_utm, repair_geometries
+from claude_gis.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GisError
+from claude_gis.raster_core import RasterFrame, load_raster, reproject_rf
+from claude_gis.runtime.artifact import is_artifact_token
+from claude_gis.runtime.datasource import load_dataset
+from claude_gis.runtime.prepare import assume_missing_crs, estimate_utm, repair_geometries
 
 _STEP_REF_RE = re.compile(r"\A(ar_[A-Za-z0-9]{10,32})#([A-Za-z0-9_]{1,32})\Z")
 
@@ -74,7 +74,7 @@ class DatasetResolver:
             meta = self.store.get(art_id)
             steps_index = meta.get("intermediate_layers") or {}
             if step_id not in steps_index:
-                raise GeoCoreError(
+                raise GisError(
                     E_INPUT_MISSING,
                     f"artifact {art_id} 没有中间步骤 {step_id}",
                     {"available_steps": sorted(steps_index)},
@@ -91,7 +91,7 @@ class DatasetResolver:
         path = Path(str(token))
         if not path.is_absolute():
             hint = {"token": str(token)}
-            raise GeoCoreError(E_INPUT_MISSING, f"输入不存在：{path}", hint)
+            raise GisError(E_INPUT_MISSING, f"输入不存在：{path}", hint)
         if path.suffix.lower() in (".tif", ".tiff"):
             prov = {"format": "raster", "path": str(path)}
             return load_raster(str(path)), prov
@@ -116,7 +116,7 @@ class DatasetResolver:
             try:
                 self._analysis_crs = CRS.from_user_input(self._crs_override)
             except Exception as exc:
-                raise GeoCoreError(
+                raise GisError(
                     E_BAD_REQUEST,
                     f"crs 参数无法解析：{self._crs_override!r}（示例：'EPSG:32622' 或 'source'）",
                     {"crs": self._crs_override},
@@ -143,7 +143,7 @@ class DatasetResolver:
         cached = self._frames.get(key)
         if cached is not None:
             if isinstance(cached, RasterFrame):
-                raise GeoCoreError(
+                raise GisError(
                     E_BAD_REQUEST,
                     f"{key} 是栅格图层；矢量算子需要矢量输入（可用 raster.* 算子处理它）",
                     {"token": key},
@@ -152,7 +152,7 @@ class DatasetResolver:
 
         gdf, prov = self._resolve_source(key)
         if isinstance(gdf, RasterFrame):
-            raise GeoCoreError(
+            raise GisError(
                 E_BAD_REQUEST,
                 f"{key} 是栅格数据；矢量算子需要矢量输入（先 raster.polygonize/sample 转矢量）",
                 {"token": key},
@@ -197,7 +197,7 @@ class DatasetResolver:
         cached = self._frames.get(key)
         if cached is not None:
             if not isinstance(cached, RasterFrame):
-                raise GeoCoreError(
+                raise GisError(
                     E_BAD_REQUEST,
                     f"{key} 是矢量图层；栅格算子需要栅格输入（先 raster.from_vector 栅格化）",
                     {"token": key},
@@ -206,7 +206,7 @@ class DatasetResolver:
 
         raw, prov = self._resolve_source(key)
         if not isinstance(raw, RasterFrame):
-            raise GeoCoreError(
+            raise GisError(
                 E_BAD_REQUEST,
                 f"{key} 是矢量数据；栅格算子需要栅格输入（先 raster.from_vector 栅格化）",
                 {"token": key},
@@ -216,7 +216,7 @@ class DatasetResolver:
         origin = str(raw.crs)
 
         if self._analysis_crs is None:
-            from geocore.runtime.prepare import estimate_utm
+            from claude_gis.runtime.prepare import estimate_utm
 
             src = raw.crs
             adopt = None

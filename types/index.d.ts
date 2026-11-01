@@ -1,4 +1,4 @@
-/** GeoCore mod 的状态契约：面板读取的每个 $.state 值都在这里声明。 */
+/** Claude-GISmod 的状态契约：面板读取的每个 $.state 值都在这里声明。 */
 
 export type GeoDataset = {
   name: string
@@ -59,7 +59,7 @@ export type GeoTab = 'data' | 'results'
 
 declare module 'claude-code' {
   interface PluginState {
-    geocore: {
+    'gismod': {
       inventory: Shaped<GeoInventory | null>
       tab: GeoTab
       selected: string | null

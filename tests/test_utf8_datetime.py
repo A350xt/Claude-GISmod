@@ -2,7 +2,7 @@
 
 背景：中文 Windows 上 Python 子进程默认按 GBK 解码 stdin，中文参数/路径/标题
 会乱码甚至报 surrogates 错误——这是实测反馈的头号硬伤。test_subprocess_utf8_roundtrip
-直接走 `python -m geocore run` 子进程（不经 api.py 直调），锁死该修复。
+直接走 `python -m claude_gis run` 子进程（不经 api.py 直调），锁死该修复。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Point
 
-from geocore import api
+from claude_gis import api
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def test_subprocess_utf8_roundtrip(cjk_dataset: Path, tmp_path: Path):
         ],
     }
     proc = subprocess.run(
-        [sys.executable, "-m", "geocore", "run", "--workdir", str(workdir)],
+        [sys.executable, "-m", "claude_gis", "run", "--workdir", str(workdir)],
         input=json.dumps(request, ensure_ascii=False).encode("utf-8"),
         capture_output=True,
         timeout=120,

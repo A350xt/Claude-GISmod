@@ -1,8 +1,8 @@
 /**
- * GeoCore —— Claude Code mod 入口。
+ * Claude-GISmod —— Claude Code mod 入口。
  *
- * - 三个 GIS 工具（mcp__geocore__inspect / analyze / visualize）交给 Python 内核执行；
- * - /geocore 打开侧边面板：工作目录的数据集、分析结果与地图预览；
+ * - 三个 GIS 工具（mcp__gismod__inspect / analyze / visualize）交给 Python 内核执行；
+ * - /gis 打开侧边面板：工作目录的数据集、分析结果与地图预览；
  * - 工具调用完成后自动刷新面板、选中新结果。
  */
 
@@ -24,7 +24,7 @@ type Session = {
 }
 
 async function openPane($: EngineInterface, session: Session): Promise<void> {
-  const opened = await $.ui.open({ id: PANE_ID, title: 'GeoCore' })
+  const opened = await $.ui.open({ id: PANE_ID, title: 'GIS' })
   session.paneOpened = opened.isPlaced
 }
 
@@ -46,7 +46,7 @@ async function runTool(
   const title = titleOf(tool, input)
   const row = { id, tool: tool.spec.name, title: `${tool.verb} ${title}` }
 
-  $.ui.status(`GeoCore · ${tool.verb}：${title}`)
+  $.ui.status(`GIS · ${tool.verb}：${title}`)
   await logActivity($, { ...row, status: 'running', message: '' })
   if (!session.paneOpened && tool.action !== 'inspect') await openPane($, session)
 
@@ -75,7 +75,7 @@ async function runTool(
   } catch (err) {
     const text = describeError(err)
     await logActivity($, { ...row, status: 'error', message: text.split('\n')[0]!.slice(0, 80) })
-    return { deny: `GeoCore ${tool.spec.name} 失败 —— ${text}` }
+    return { deny: `GIS ${tool.spec.name} 失败 —— ${text}` }
   } finally {
     $.ui.status(undefined)
   }
@@ -102,25 +102,25 @@ export const register: Register = (on, options) => {
       await $.tool.register(tool.spec)
     }
     await $.command.register({
-      name: 'geocore',
-      description: '打开 GeoCore 面板：工作目录的空间数据、分析结果与地图预览',
+      name: 'gis',
+      description: '打开 GIS 面板：工作目录的空间数据、分析结果与地图预览',
     })
     return next(e)
   })
 
-  on('command.run', { command: 'geocore' }, async $ => {
+  on('command.run', { command: 'gis' }, async $ => {
     await openPane($, session)
     $.clock.after(0, () => void refreshInventory($, session.cfg()))
     return {
       text: session.paneOpened
-        ? 'GeoCore 面板已打开。'
-        : 'GeoCore 面板已就绪，当前界面暂时放不下侧边面板。',
+        ? 'GIS 面板已打开。'
+        : 'GIS 面板已就绪，当前界面暂时放不下侧边面板。',
     }
   })
 
-  on('tool.call', { tool: 'mcp__geocore__inspect' }, ($, e) => runTool($, e, inspect, session))
-  on('tool.call', { tool: 'mcp__geocore__analyze' }, ($, e) => runTool($, e, analyze, session))
-  on('tool.call', { tool: 'mcp__geocore__visualize' }, ($, e) => runTool($, e, visualize, session))
+  on('tool.call', { tool: 'mcp__gismod__inspect' }, ($, e) => runTool($, e, inspect, session))
+  on('tool.call', { tool: 'mcp__gismod__analyze' }, ($, e) => runTool($, e, analyze, session))
+  on('tool.call', { tool: 'mcp__gismod__visualize' }, ($, e) => runTool($, e, visualize, session))
 
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, ($, e) => renderPanel($, e, session.cfg))
 }

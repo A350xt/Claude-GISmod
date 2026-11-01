@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 from shapely.geometry import Point, box
 
-from geocore.analysis.proximity import (handle_buffer, handle_nearest,
+from claude_gis.analysis.proximity import (handle_buffer, handle_nearest,
                                         handle_within_distance)
-from geocore.analysis.resolver import DatasetResolver
-from geocore.protocol import E_EMPTY_RESULT, GeoCoreError
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis.analysis.resolver import DatasetResolver
+from claude_gis.protocol import E_EMPTY_RESULT, GisError
+from claude_gis.runtime.artifact import ArtifactStore
 
 from helpers import write
 
@@ -69,7 +69,7 @@ def test_nearest_empty_ref_raises(resolver, workdir, sq_1km):
     empty = sq_1km.iloc[0:0]
     v_path = write(_gdf([Point(0, 0)], {"pid": ["p"]}), "p.geojson", workdir)
     e_path = write(empty, "empty.geojson", workdir)
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         handle_nearest(resolver, {"input": v_path, "ref": e_path}, "n")
     assert ei.value.code == E_EMPTY_RESULT
 

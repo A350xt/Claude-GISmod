@@ -6,12 +6,12 @@ import re
 
 import numpy as np
 
-from geocore.analysis import overlay, proximity, query, raster, trajectory, zonal
-from geocore.analysis.common import preview_table
-from geocore.analysis.resolver import DatasetResolver
-from geocore.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_OP_UNKNOWN, GeoCoreError
-from geocore.raster_core import RasterFrame, _check_cells
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis.analysis import overlay, proximity, query, raster, trajectory, zonal
+from claude_gis.analysis.common import preview_table
+from claude_gis.analysis.resolver import DatasetResolver
+from claude_gis.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_OP_UNKNOWN, GisError
+from claude_gis.raster_core import RasterFrame, _check_cells
+from claude_gis.runtime.artifact import ArtifactStore
 
 _STEP_ID_RE = re.compile(r"\A[A-Za-z0-9_]{1,32}\Z")
 
@@ -27,7 +27,7 @@ NON_METRIC_OPS = {"query.filter", "query.select", "trajectory.build"}
 def execute_analyze(workdir, request: dict) -> dict:
     operations = request.get("operations")
     if not isinstance(operations, list) or not operations:
-        raise GeoCoreError(E_BAD_REQUEST, "analyze 需要 operations 列表（至少一步）")
+        raise GisError(E_BAD_REQUEST, "analyze 需要 operations 列表（至少一步）")
 
     title = str(request.get("title") or "空间分析")
     output_format = str((request.get("output") or {}).get("format", "gpkg")).lower()
@@ -35,7 +35,7 @@ def execute_analyze(workdir, request: dict) -> dict:
     # 请求级 CRS 覆盖：显式指定 > 自动策略（纯非度量管线保持源 CRS）
     crs_override = request.get("crs")
     if crs_override is not None and not isinstance(crs_override, str):
-        raise GeoCoreError(E_BAD_REQUEST, "crs 必须是字符串（如 'EPSG:32622' 或 'source'）")
+        raise GisError(E_BAD_REQUEST, "crs 必须是字符串（如 'EPSG:32622' 或 'source'）")
     if crs_override is None:
         op_names = {str(op.get("op") or "") for op in operations if isinstance(op, dict)}
         if op_names and op_names <= NON_METRIC_OPS:
@@ -53,31 +53,31 @@ def execute_analyze(workdir, request: dict) -> dict:
 
     for i, op_req in enumerate(operations):
         if not isinstance(op_req, dict):
-            raise GeoCoreError(E_BAD_REQUEST, f"第 {i + 1} 步不是对象")
+            raise GisError(E_BAD_REQUEST, f"第 {i + 1} 步不是对象")
         op = op_req.get("op")
         if not op:
-            raise GeoCoreError(E_BAD_REQUEST, f"第 {i + 1} 步缺少 op 字段")
+            raise GisError(E_BAD_REQUEST, f"第 {i + 1} 步缺少 op 字段")
         handler = OP_HANDLERS.get(op)
         if handler is None:
-            raise GeoCoreError(
+            raise GisError(
                 E_OP_UNKNOWN,
                 f"未知操作：{op}",
                 {"step": i + 1, "available": sorted(OP_HANDLERS)},
             )
         raw_id = str(op_req.get("id") or f"s{i + 1}")
         if not _STEP_ID_RE.fullmatch(raw_id) or raw_id in seen_ids:
-            raise GeoCoreError(E_BAD_REQUEST, f"步骤 id 非法或重复：{raw_id}", {"step": i + 1})
+            raise GisError(E_BAD_REQUEST, f"步骤 id 非法或重复：{raw_id}", {"step": i + 1})
         seen_ids.add(raw_id)
 
         params = {k: v for k, v in op_req.items() if k not in ("op", "id", "allow_empty")}
         allow_empty = bool(op_req.get("allow_empty", False))
         try:
             result = handler(resolver, params, raw_id)
-        except GeoCoreError as exc:
+        except GisError as exc:
             exc.details = {**exc.details, "step": raw_id, "op": op}
             raise
         except KeyError as exc:
-            raise GeoCoreError(E_BAD_REQUEST, str(exc.args[0]), {"step": raw_id, "op": op}) from exc
+            raise GisError(E_BAD_REQUEST, str(exc.args[0]), {"step": raw_id, "op": op}) from exc
 
         gdf = result.gdf
         raster_rf = result.raster
@@ -90,7 +90,7 @@ def execute_analyze(workdir, request: dict) -> dict:
             count = int(len(gdf)) if gdf is not None else 0
         if empty:
             if not allow_empty:
-                raise GeoCoreError(
+                raise GisError(
                     E_EMPTY_RESULT,
                     f"步骤 {raw_id}（{op}）结果为空；如空集属预期，请在该步加 \"allow_empty\": true",
                     {"step": raw_id, "op": op},

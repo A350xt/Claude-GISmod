@@ -12,7 +12,7 @@ from __future__ import annotations
 import geopandas as gpd
 from shapely.validation import explain_validity
 
-from geocore.protocol import E_CRS_AMBIGUOUS, GeoCoreError
+from claude_gis.protocol import E_CRS_AMBIGUOUS, GisError
 
 
 def repair_geometries(gdf: gpd.GeoDataFrame, warnings: list[str]) -> gpd.GeoDataFrame:
@@ -62,7 +62,7 @@ def repair_geometries(gdf: gpd.GeoDataFrame, warnings: list[str]) -> gpd.GeoData
     ]
     still_bad = ~repaired.geometry.is_valid | repaired.geometry.is_empty
     if bool(still_bad.any()):
-        raise GeoCoreError(
+        raise GisError(
             E_GEOMETRY_INVALID_UNFIXABLE,
             f"{int(still_bad.sum())} 条要素几何无法修复",
             {"samples": list(reasons)},
@@ -78,7 +78,7 @@ def assume_missing_crs(gdf: gpd.GeoDataFrame, provenance: str, warnings: list[st
     minx, miny, maxx, maxy = gdf.total_bounds
     in_range = -181 <= minx <= 181 and -91 <= miny <= 91 and -181 <= maxx <= 181 and -91 <= maxy <= 91
     if not in_range:
-        raise GeoCoreError(
+        raise GisError(
             E_CRS_AMBIGUOUS,
             f"数据缺失 CRS 且坐标值不在经纬度范围内，无法安全假定坐标系：{provenance}",
             {"bounds": [float(minx), float(miny), float(maxx), float(maxy)]},
@@ -92,13 +92,13 @@ def estimate_utm(gdf: gpd.GeoDataFrame):
     try:
         target = gdf.estimate_utm_crs()
     except Exception as exc:
-        raise GeoCoreError(
+        raise GisError(
             E_CRS_AMBIGUOUS,
             "无法为该地理范围确定合适的米制投影坐标系",
             {"error": repr(exc)},
         ) from exc
     if target is None:
-        raise GeoCoreError(E_CRS_AMBIGUOUS, "无法为该地理范围确定合适的米制投影坐标系")
+        raise GisError(E_CRS_AMBIGUOUS, "无法为该地理范围确定合适的米制投影坐标系")
     return target
 
 
@@ -116,7 +116,7 @@ class MetricCRSPlan:
         self.sources[name] = str(src_crs.to_string() if src_crs is not None else "")
         if self.target_crs is None:
             if src_crs is None:
-                raise GeoCoreError(E_CRS_AMBIGUOUS, f"{name}: 无 CRS，禁止度量运算")
+                raise GisError(E_CRS_AMBIGUOUS, f"{name}: 无 CRS，禁止度量运算")
             if src_crs.is_geographic:
                 target = estimate_utm(gdf)
             else:

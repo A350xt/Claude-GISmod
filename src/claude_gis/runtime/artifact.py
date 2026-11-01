@@ -1,4 +1,4 @@
-"""GIS Result artifact persistence for GeoCore.
+"""GIS Result artifact persistence for Claude-GISmod.
 
 Each analysis produces one directory holding meta.json, plan.json and the
 result dataset. The store below enforces three invariants on every access:
@@ -21,7 +21,7 @@ import string
 from datetime import datetime
 from typing import Any
 
-from geocore.protocol import E_BAD_REQUEST, E_INPUT_MISSING, E_OUTPUT_ERROR, GeoCoreError
+from claude_gis.protocol import E_BAD_REQUEST, E_INPUT_MISSING, E_OUTPUT_ERROR, GisError
 
 _ARTIFACT_ID_RE = re.compile(r"\Aar_[A-Za-z0-9]{10,32}\Z")
 _ALPHABET = string.ascii_lowercase + string.digits
@@ -45,7 +45,7 @@ def _checked_id(artifact_id: str) -> str:
     # 白名单字符集：分隔符与点点段在合法 id 中不可能出现
     if isinstance(artifact_id, str) and _ARTIFACT_ID_RE.fullmatch(artifact_id):
         return artifact_id
-    raise GeoCoreError(
+    raise GisError(
         E_BAD_REQUEST,
         "非法 artifact_id：" + repr(artifact_id),
         {"expected_pattern": _ARTIFACT_ID_RE.pattern},
@@ -75,16 +75,16 @@ class ArtifactStore:
         candidate = os.path.join(self.root_real, ident)
         real = os.path.realpath(candidate)
         if not _contained(self.root_real, real):
-            raise GeoCoreError(E_OUTPUT_ERROR, "artifact 目录越界")
+            raise GisError(E_OUTPUT_ERROR, "artifact 目录越界")
         return real
 
     def _file_of(self, artifact_id: str, name: str) -> str:
         if name not in (_META_NAME, _PLAN_NAME):
-            raise GeoCoreError(E_OUTPUT_ERROR, "非法产物文件名")
+            raise GisError(E_OUTPUT_ERROR, "非法产物文件名")
         candidate = os.path.join(self._dir_of(artifact_id), name)
         real = os.path.realpath(candidate)
         if not _contained(self.root_real, real):
-            raise GeoCoreError(E_OUTPUT_ERROR, "产物文件越界")
+            raise GisError(E_OUTPUT_ERROR, "产物文件越界")
         return real
 
     def result_path_of(self, artifact_id: str, fmt: str) -> str:
@@ -93,7 +93,7 @@ class ArtifactStore:
         candidate = os.path.join(self._dir_of(artifact_id), name)
         real = os.path.realpath(candidate)
         if not _contained(self.root_real, real):
-            raise GeoCoreError(E_OUTPUT_ERROR, "结果文件越界")
+            raise GisError(E_OUTPUT_ERROR, "结果文件越界")
         return real
 
     def image_path_for(self, artifact_id: str, stem: str) -> Any:
@@ -102,7 +102,7 @@ class ArtifactStore:
         candidate = os.path.join(self._dir_of(artifact_id), stem_clean + ".png")
         real = os.path.realpath(candidate)
         if not _contained(self.root_real, real):
-            raise GeoCoreError(E_OUTPUT_ERROR, "图片越界")
+            raise GisError(E_OUTPUT_ERROR, "图片越界")
         from pathlib import Path
 
         return Path(real)
@@ -111,7 +111,7 @@ class ArtifactStore:
 
     def _write_json(self, target_real: str, payload: dict) -> None:
         if not _contained(self.root_real, os.path.realpath(target_real)):
-            raise GeoCoreError(E_OUTPUT_ERROR, "json 写出越界")
+            raise GisError(E_OUTPUT_ERROR, "json 写出越界")
         import io
 
         data = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -123,14 +123,14 @@ class ArtifactStore:
 
     def _read_json(self, target_real: str) -> dict:
         if not _contained(self.root_real, os.path.realpath(target_real)):
-            raise GeoCoreError(E_OUTPUT_ERROR, "json 读取越界")
+            raise GisError(E_OUTPUT_ERROR, "json 读取越界")
         import io
 
         try:
             with io.open(target_real, "r", encoding="utf-8") as fh:
                 return json.load(fh)
         except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
-            raise GeoCoreError(
+            raise GisError(
                 E_OUTPUT_ERROR,
                 f"artifact 元数据损坏（{os.path.basename(os.path.dirname(target_real))}）：{exc}",
                 {"file": os.path.basename(target_real)},
@@ -142,7 +142,7 @@ class ArtifactStore:
         artifact_id = _new_id()
         dir_real = self._dir_of(artifact_id)
         if not _contained(self.root_real, os.path.realpath(dir_real)):
-            raise GeoCoreError(E_OUTPUT_ERROR, "创建目录越界")
+            raise GisError(E_OUTPUT_ERROR, "创建目录越界")
         os.mkdir(dir_real)
         self._write_json(
             os.path.join(dir_real, _META_NAME),
@@ -174,7 +174,7 @@ class ArtifactStore:
         try:
             from pathlib import Path
 
-            from geocore.raster_core import RasterFrame, save_raster
+            from claude_gis.raster_core import RasterFrame, save_raster
 
             # 中间步骤统一持久化（无论最终结果是矢量还是栅格）：
             # RasterFrame → step_<id>.tif；GeoDataFrame → GPKG 图层（最终为 geojson 时除外）
@@ -214,10 +214,10 @@ class ArtifactStore:
                     step_val.to_file(result_path, layer=layer, driver="GPKG",
                                      engine="pyogrio", index=False)
                     steps_index[sid] = {"layer": layer, "count": int(len(step_val))}
-        except GeoCoreError:
+        except GisError:
             raise
         except Exception as exc:
-            raise GeoCoreError(E_OUTPUT_ERROR, "结果数据集写出失败:" + str(exc)) from exc
+            raise GisError(E_OUTPUT_ERROR, "结果数据集写出失败:" + str(exc)) from exc
 
         self._write_json(self._file_of(artifact_id, _PLAN_NAME), {
             "title": title,
@@ -253,7 +253,7 @@ class ArtifactStore:
     def get(self, artifact_id: str) -> dict:
         target = self._file_of(artifact_id, _META_NAME)
         if not os.path.exists(target):
-            raise GeoCoreError(E_INPUT_MISSING, "Artifact 不存在:" + artifact_id, {"id": artifact_id})
+            raise GisError(E_INPUT_MISSING, "Artifact 不存在:" + artifact_id, {"id": artifact_id})
         return self._read_json(target)
 
     def resolve_result_path(self, token: str):
@@ -262,7 +262,7 @@ class ArtifactStore:
         res = meta.get("result") or {}
         path = self.result_path_of(token, res.get("format", "gpkg"))
         if not os.path.exists(path):
-            raise GeoCoreError(E_INPUT_MISSING, "Artifact 结果文件缺失:" + token, {"id": token})
+            raise GisError(E_INPUT_MISSING, "Artifact 结果文件缺失:" + token, {"id": token})
         from pathlib import Path
 
         return Path(path)
@@ -283,7 +283,7 @@ class ArtifactStore:
                 "warnings": warnings, "crs": crs}
         try:
             meta = self.get(artifact_id)
-        except GeoCoreError:
+        except GisError:
             meta = {}
         meta.update(base)
         self._write_json(self._file_of(artifact_id, _META_NAME), meta)

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from geocore.protocol import E_BAD_REQUEST, GeoCoreError, json_safe
+from claude_gis.protocol import E_BAD_REQUEST, GisError, json_safe
 
 RASTER_EXTS = {".tif", ".tiff"}
 MAX_CELLS = 4_000_000  # 单幅栅格像元上限，防失控
@@ -99,12 +99,12 @@ def load_raster(path_str: str, band: int = 1) -> RasterFrame:
 
     path = Path(str(path_str))
     if not path.exists():
-        raise GeoCoreError("E_INPUT_MISSING", f"栅格不存在：{path}", {"path": str(path)})
+        raise GisError("E_INPUT_MISSING", f"栅格不存在：{path}", {"path": str(path)})
     try:
         with rasterio.open(path) as src:
             n = int(src.count)
             if band < 1 or band > n:
-                raise GeoCoreError(E_BAD_REQUEST,
+                raise GisError(E_BAD_REQUEST,
                                    f"波段号 {band} 超出范围（共 {n} 个波段）",
                                    {"bands": n})
             raw = src.read(band).astype("float32")
@@ -117,10 +117,10 @@ def load_raster(path_str: str, band: int = 1) -> RasterFrame:
 
             crs = CRS.from_user_input(src.crs) if src.crs is not None else None
             return RasterFrame(raw, src.transform, crs, name=path.stem)
-    except GeoCoreError:
+    except GisError:
         raise
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"栅格读取失败：{exc}", {"path": str(path)}) from exc
+        raise GisError(E_BAD_REQUEST, f"栅格读取失败：{exc}", {"path": str(path)}) from exc
 
 
 def raster_meta_of(path_str: str) -> dict:
@@ -148,7 +148,7 @@ def raster_meta_of(path_str: str) -> dict:
                 "quantiles": {"min": q[0], "p50": q[3], "max": q[6]} if q else None,
             }
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"栅格元信息读取失败：{exc}", {"path": str(path)}) from exc
+        raise GisError(E_BAD_REQUEST, f"栅格元信息读取失败：{exc}", {"path": str(path)}) from exc
 
 
 def save_raster(rf: RasterFrame, path: Path) -> Path:
@@ -166,15 +166,15 @@ def save_raster(rf: RasterFrame, path: Path) -> Path:
             dst.write(rf.data.astype("float32"), 1)
         return path
     except Exception as exc:
-        raise GeoCoreError("E_OUTPUT_ERROR", f"栅格写出失败：{exc}", {"path": str(path)}) from exc
+        raise GisError("E_OUTPUT_ERROR", f"栅格写出失败：{exc}", {"path": str(path)}) from exc
 
 
 def _check_cells(rf: RasterFrame) -> None:
     n = int(rf.data.size)
     if n == 0:
-        raise GeoCoreError(E_BAD_REQUEST, "栅格为空（0 像元）")
+        raise GisError(E_BAD_REQUEST, "栅格为空（0 像元）")
     if n > MAX_CELLS:
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"栅格过大：{n} 像元超过上限 {MAX_CELLS}；请增大 cellsize 或缩小范围",
             {"cells": n, "limit": MAX_CELLS},
@@ -213,7 +213,7 @@ def reproject_rf(rf: RasterFrame, crs, transform=None, shape=None) -> RasterFram
             resampling=Resampling.nearest,
         )
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"栅格重投影失败：{exc}") from exc
+        raise GisError(E_BAD_REQUEST, f"栅格重投影失败：{exc}") from exc
     return RasterFrame(dst, transform, crs, name=rf.name)
 
 
@@ -227,7 +227,7 @@ def align_to(rf: RasterFrame, template: RasterFrame, method: str = "nearest") ->
     resampling = {"nearest": Resampling.nearest, "bilinear": Resampling.bilinear,
                   "cubic": Resampling.cubic}.get(method)
     if resampling is None:
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            f"未知重采样方法：{method}（可选 nearest/bilinear/cubic）")
     dst = np.full(template.data.shape, np.nan, dtype="float32")
     try:
@@ -239,7 +239,7 @@ def align_to(rf: RasterFrame, template: RasterFrame, method: str = "nearest") ->
             resampling=resampling,
         )
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"栅格对齐失败：{exc}") from exc
+        raise GisError(E_BAD_REQUEST, f"栅格对齐失败：{exc}") from exc
     return RasterFrame(dst, template.transform, template.crs, name=rf.name)
 
 
@@ -249,7 +249,7 @@ def rasterize_vector(gdf, transform, shape, field=None, default=1.0, all_touched
 
     if field is not None:
         if field not in gdf.columns:
-            raise GeoCoreError("E_INPUT_MISSING",
+            raise GisError("E_INPUT_MISSING",
                                f"字段不存在：{field}",
                                {"columns": [str(c) for c in gdf.columns]})
         shapes = ((geom, float(val)) for geom, val in
@@ -263,7 +263,7 @@ def rasterize_vector(gdf, transform, shape, field=None, default=1.0, all_touched
             out=out, all_touched=all_touched, dtype="float32",
         )
     except Exception as exc:
-        raise GeoCoreError(E_BAD_REQUEST, f"栅格化失败：{exc}") from exc
+        raise GisError(E_BAD_REQUEST, f"栅格化失败：{exc}") from exc
     return out
 
 
@@ -273,16 +273,16 @@ def make_transform(bounds: tuple, cellsize: float, snap: bool = True):
 
     minx, miny, maxx, maxy = (float(b) for b in bounds)
     if maxx <= minx or maxy <= miny:
-        raise GeoCoreError(E_BAD_REQUEST, f"bounds 非法：{bounds}")
+        raise GisError(E_BAD_REQUEST, f"bounds 非法：{bounds}")
     if cellsize <= 0:
-        raise GeoCoreError(E_BAD_REQUEST, f"cellsize 必须为正数：{cellsize}")
+        raise GisError(E_BAD_REQUEST, f"cellsize 必须为正数：{cellsize}")
     if snap:  # 网格对齐到 cellsize 整数倍，避免不同来源栅格错半像元
         minx = np.floor(minx / cellsize) * cellsize
         maxy = np.ceil(maxy / cellsize) * cellsize
     width = max(1, int(np.ceil((maxx - minx) / cellsize - 1e-9)))
     height = max(1, int(np.ceil((maxy - miny) / cellsize - 1e-9)))
     if width * height > MAX_CELLS:
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"栅格模板过大：{height}×{width} 超过 {MAX_CELLS} 像元上限；"
             f"请增大 cellsize 或缩小范围",

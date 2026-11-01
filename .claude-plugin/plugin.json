@@ -1,7 +1,7 @@
 {
-  "name": "geocore",
-  "version": "0.2.0",
-  "description": "GeoCore GIS：让 Claude 用 inspect / analyze / visualize 三个工具做空间分析，侧边面板看数据、结果和地图",
+  "name": "gismod",
+  "version": "0.3.0",
+  "description": "Claude-GISmod：让 Claude 用 inspect / analyze / visualize 三个工具做 GIS 空间分析，侧边面板看数据、结果和地图，坐标系可切换",
   "author": {
     "name": "A350xt"
   },
@@ -10,7 +10,7 @@
     "python": {
       "type": "string",
       "title": "Python 解释器",
-      "description": "装有 geopandas 等依赖的 Python。留空则依次尝试 GEOCORE_PYTHON、mod 目录的 .venv、系统 python",
+      "description": "装有 geopandas 等依赖的 Python。留空则依次尝试 CLAUDE_GIS_PYTHON、mod 目录的 .venv、系统 python",
       "default": ""
     },
     "workdir": {

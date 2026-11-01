@@ -1,6 +1,6 @@
-"""geocore CLI：stdin 一条 JSON 请求 → stdout 一条 JSON 封套。
+"""claude_gis CLI：stdin 一条 JSON 请求 → stdout 一条 JSON 封套。
 
-    echo '{"action":"inspect","path":"data/x.geojson"}' | python -m geocore run --workdir .
+    echo '{"action":"inspect","path":"data/x.geojson"}' | python -m claude_gis run --workdir .
 
 Claude Code mod（hooks/kernel.ts）就是通过它驱动内核的；任何宿主都可以用同一协议。
 """
@@ -19,7 +19,7 @@ ACTIONS = ("inspect", "analyze", "visualize", "compose", "show", "operations", "
 
 
 def _handlers() -> dict[str, Callable[[Path, dict], dict]]:
-    from geocore import api
+    from claude_gis import api
 
     return {
         "inspect": lambda wd, p: api.inspect(p),
@@ -34,15 +34,15 @@ def _handlers() -> dict[str, Callable[[Path, dict], dict]]:
 
 
 def _emit(envelope: dict) -> None:
-    from geocore.protocol import json_default
+    from claude_gis.protocol import json_default
 
     print(json.dumps(envelope, ensure_ascii=False, default=json_default))
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="geocore")
+    parser = argparse.ArgumentParser(prog="claude_gis")
     parser.add_argument("command", choices=["run"], help="执行一条 JSON 请求")
-    parser.add_argument("--workdir", default=os.environ.get("GEOCORE_WORKDIR"))
+    parser.add_argument("--workdir", default=os.environ.get("CLAUDE_GIS_WORKDIR"))
     args = parser.parse_args(argv)
 
     # 中文 Windows 默认按 GBK 收发；协议统一 UTF-8
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
 
-    from geocore.protocol import envelope_from_exception, error_envelope, ok_envelope
+    from claude_gis.protocol import envelope_from_exception, error_envelope, ok_envelope
 
     raw = sys.stdin.read()
     try:

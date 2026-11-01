@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from geocore.analysis.common import StepResult, need, opt
-from geocore.providers.geostack import PROVIDER
+from claude_gis.analysis.common import StepResult, need, opt
+from claude_gis.providers.geostack import PROVIDER
 
 
 def handle_buffer(resolver, params: dict, step_id: str) -> StepResult:

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from geocore.analysis.resolver import DatasetResolver
-from geocore.analysis.zonal import handle_zonal
-from geocore.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GeoCoreError
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis.analysis.resolver import DatasetResolver
+from claude_gis.analysis.zonal import handle_zonal
+from claude_gis.protocol import E_BAD_REQUEST, E_INPUT_MISSING, GisError
+from claude_gis.runtime.artifact import ArtifactStore
 
 from helpers import write
 
@@ -68,13 +68,13 @@ def test_sum_without_field_rejected(resolver, workdir, two_regions_points_lines)
     regions, pts, _l = two_regions_points_lines
     rp = write(regions, "regions.geojson", workdir)
     pp = write(pts, "pts.geojson", workdir)
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         handle_zonal(resolver, {"regions": rp, "data": pp, "stats": ["sum"]}, "z")
     assert ei.value.code == E_BAD_REQUEST
 
 
 def test_missing_field_column_rejected(resolver, synthetic_dir):
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         handle_zonal(resolver, {
             "regions": str(synthetic_dir / "districts.geojson"),
             "data": str(synthetic_dir / "parcels.geojson"),

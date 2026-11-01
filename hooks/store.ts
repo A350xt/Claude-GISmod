@@ -14,20 +14,20 @@ import type {
 import { callKernel, describeError, type KernelConfig } from './kernel'
 
 // 结构变化时改 shape 标签：旧版本存下的值会被当作初始值丢弃
-const inventory = atom({ plugin: 'geocore', key: 'inventory' } as const, null, {
+const inventory = atom({ plugin: 'gismod', key: 'inventory' } as const, null, {
   shape: 'inventory-1',
 })
-const preview = atom({ plugin: 'geocore', key: 'preview' } as const, null, {
+const preview = atom({ plugin: 'gismod', key: 'preview' } as const, null, {
   shape: 'preview-2',
 })
-const activity = atom({ plugin: 'geocore', key: 'activity' } as const, [], {
+const activity = atom({ plugin: 'gismod', key: 'activity' } as const, [], {
   shape: 'activity-1',
 })
-const tab = atom({ plugin: 'geocore', key: 'tab' } as const, 'data' as GeoTab)
-const selected = atom({ plugin: 'geocore', key: 'selected' } as const, null)
-const crs = atom({ plugin: 'geocore', key: 'crs' } as const, 'source')
-const busy = atom({ plugin: 'geocore', key: 'busy' } as const, null)
-const lastError = atom({ plugin: 'geocore', key: 'error' } as const, null)
+const tab = atom({ plugin: 'gismod', key: 'tab' } as const, 'data' as GeoTab)
+const selected = atom({ plugin: 'gismod', key: 'selected' } as const, null)
+const crs = atom({ plugin: 'gismod', key: 'crs' } as const, 'source')
+const busy = atom({ plugin: 'gismod', key: 'busy' } as const, null)
+const lastError = atom({ plugin: 'gismod', key: 'error' } as const, null)
 
 // ------------------------------------------------------------------ 清单
 

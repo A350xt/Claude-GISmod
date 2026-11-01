@@ -2,7 +2,7 @@
 
 Everything derives from numpy RNG(seed=42); rerunning reproduces byte-similar
 data (timestamps absent). Ground-truth counts are recorded during construction
-from grid arithmetic — deliberately NOT derived via the GeoCore stack — so the
+from grid arithmetic — deliberately NOT derived via the claude_gis stack — so the
 benchmark suite can assert against independently obtained numbers.
 """
 

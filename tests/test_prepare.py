@@ -6,8 +6,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Point, Polygon, box
 
-from geocore.protocol import E_CRS_AMBIGUOUS, GeoCoreError
-from geocore.runtime.prepare import (assume_missing_crs, estimate_utm,
+from claude_gis.protocol import E_CRS_AMBIGUOUS, GisError
+from claude_gis.runtime.prepare import (assume_missing_crs, estimate_utm,
                                      repair_geometries)
 
 from conftest import bowtie_gdf
@@ -24,7 +24,7 @@ def test_missing_crs_assumed_wgs84_with_warning():
 def test_missing_crs_out_of_range_rejected():
     # UTM 米制坐标但声称无 CRS：绝不允许瞎猜
     gdf = gpd.GeoDataFrame({"n": [1]}, geometry=[Point(325000, 3450000)], crs=None)
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         assume_missing_crs(gdf, "mystery.shp", [])
     assert ei.value.code == E_CRS_AMBIGUOUS
 

@@ -1,12 +1,12 @@
 {
-  "name": "geocore",
-  "description": "GeoCore：Claude Code 的 GIS 空间分析 mod",
+  "name": "gismod",
+  "description": "Claude-GISmod：Claude Code 的 GIS 空间分析 mod",
   "owner": {
     "name": "A350xt"
   },
   "plugins": [
     {
-      "name": "geocore",
+      "name": "gismod",
       "source": "./"
     }
   ]

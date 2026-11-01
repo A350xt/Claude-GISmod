@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 from shapely.geometry import Point
 
-from geocore import api
-from geocore.runtime.datasource import load_dataset
+from claude_gis import api
+from claude_gis.runtime.datasource import load_dataset
 
 
 @pytest.fixture

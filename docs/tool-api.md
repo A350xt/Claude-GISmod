@@ -1,7 +1,7 @@
-# 工具 API 契约（v0.3）
+# 工具 API 契约（Claude-GISmod v0.3）
 
 三个工具构成 Claude 的全部 GIS 表达面，由 mod 注册为
-`mcp__geocore__inspect / analyze / visualize`（定义见 [hooks/tools.ts](../hooks/tools.ts)）。
+`mcp__gismod__inspect / analyze / visualize`（定义见 [hooks/tools.ts](../hooks/tools.ts)）。
 
 内核层面每个请求返回一条 JSON 封套：
 
@@ -27,7 +27,7 @@
 
 ---
 
-## inspect（mcp__geocore__inspect）
+## inspect（mcp__gismod__inspect）
 
 请求：`{ "path": "<GeoJSON|GPKG|SHP|CSV(含 lon/lat 列)>" }`
 GPKG 可选 `"layer"`；多图层时缺省取第一层。
@@ -39,7 +39,7 @@ capabilities[]/notes[]`。
 使用教条：**遇到陌生数据，第一步永远是 inspect**。由 quality 决定是否需要预处理，
 由 capabilities 声明当前内核能做什么。
 
-## analyze（mcp__geocore__analyze）
+## analyze（mcp__gismod__analyze）
 
 请求：`{ title?, crs?, operations: Op[], output?: { format: "gpkg"|"geojson" } }`
 
@@ -147,10 +147,11 @@ CRS 承诺（v0.2 起）：
 中文文件名、中文属性值、中文标题在任何 locale 的宿主（含中文 Windows 的 GBK
 默认代码页）下均原样往返。
 
-## visualize（mcp__geocore__visualize）
+## visualize（mcp__gismod__visualize）
 
-请求：`{ source, base?, base_style?, title?, style? }`
+请求：`{ source, crs?, base?, base_style?, title?, style? }`
 source 同上三种引用写法；写入既有 artifact 目录或新建 map 类型 artifact。
+`crs` 为出图坐标系：`"source"`（默认，保持数据原坐标系）、`"utm"`（自动分带）或 `"EPSG:4490"` 等。
 `base` 为底图层（如陆地/行政区），垫在主图层之下；`base_style` 可调
 `{ color, edgecolor, alpha }`。
 
@@ -167,12 +168,18 @@ style 键：`mode`(single|point|categorical|choropleth)、`field`、
 百分位拉伸，默认 [2,98]，`unit` 定色标名）或
 `categorical`（`category_colors` 类别色表）。
 
-## 底层协议（供桥实现者）
+## 底层协议（供其他宿主实现者）
 
 ```bash
-python -m geocore run --workdir <dir>   # stdin: {"action":"analyze", ...payload}
-                                        # stdout: 单封套 JSON；exit 0 ok / 2 领域错误 / 1 内部错误
+python -m claude_gis run --workdir <目录>   # stdin:  {"action": "analyze", ...参数}
+                                           # stdout: 一条 JSON 封套；exit 0 成功 / 2 领域错误 / 1 内部错误
 ```
 
-其他 action：`inspect`、`visualize`、`show`（含 artifact_id）、`operations`
-（返回当前可用 op 词表，便于自省）。
+| action | 用途 |
+| --- | --- |
+| `inspect` / `analyze` / `visualize` | 三个工具的实现 |
+| `compose` | 多图层成品版面（图例、比例尺、指北针） |
+| `show` | 读取某个 artifact 的元数据（参数 `artifact_id`） |
+| `operations` | 当前可用的操作词表，便于自省 |
+| `list` | 面板清单：`{datasets_dirs: [...]}` → 数据集与 artifacts |
+| `preview` | 面板预览：`{source, crs?, png?}` → 地图卡片 SVG、可选 PNG、摘要；`crs` 只影响显示 |

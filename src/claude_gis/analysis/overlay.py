@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from geocore.analysis.common import StepResult, need
-from geocore.providers.geostack import PROVIDER
+from claude_gis.analysis.common import StepResult, need
+from claude_gis.providers.geostack import PROVIDER
 
 
 def _both(resolver, params: dict, op: str):

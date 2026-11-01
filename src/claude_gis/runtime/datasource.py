@@ -9,7 +9,7 @@ from typing import Any
 import geopandas as gpd
 import pandas as pd
 
-from geocore.protocol import E_BAD_REQUEST, E_CRS_AMBIGUOUS, E_EMPTY_RESULT, E_INPUT_MISSING, GeoCoreError
+from claude_gis.protocol import E_BAD_REQUEST, E_CRS_AMBIGUOUS, E_EMPTY_RESULT, E_INPUT_MISSING, GisError
 
 LON_CANDIDATES = ("lon", "lng", "longitude", "x")
 LAT_CANDIDATES = ("lat", "latitude", "y")
@@ -54,13 +54,13 @@ def _load_csv_points(path: Path, layer: str | None) -> gpd.GeoDataFrame:
     lon_col = next((c for c in df.columns if c.strip().lower() in LON_CANDIDATES), None)
     lat_col = next((c for c in df.columns if c.strip().lower() in LAT_CANDIDATES), None)
     if lon_col is None or lat_col is None:
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"CSV 文件缺少经纬度列，无法识别为空间数据：{path}",
             {"expected_lon": list(LON_CANDIDATES), "expected_lat": list(LAT_CANDIDATES)},
         )
     if not (_looks_like_lon(df[lon_col]) and _looks_like_lat(df[lat_col])):
-        raise GeoCoreError(
+        raise GisError(
             E_CRS_AMBIGUOUS,
             f"CSV 的 {lon_col}/{lat_col} 列数值不在经纬度范围内，拒绝猜测坐标系",
             {"path": str(path)},
@@ -76,11 +76,11 @@ def _load_csv_points(path: Path, layer: str | None) -> gpd.GeoDataFrame:
 def load_dataset(path_str: str, layer: str | None = None) -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
     """Load any supported vector source.
 
-    Returns (GeoDataFrame, provenance dict). Raises GeoCoreError with a stable code.
+    Returns (GeoDataFrame, provenance dict). Raises GisError with a stable code.
     """
     path = Path(path_str)
     if not path.exists():
-        raise GeoCoreError(E_INPUT_MISSING, f"输入数据不存在：{path}", {"path": str(path)})
+        raise GisError(E_INPUT_MISSING, f"输入数据不存在：{path}", {"path": str(path)})
 
     ext = path.suffix.lower()
 
@@ -90,7 +90,7 @@ def load_dataset(path_str: str, layer: str | None = None) -> tuple[gpd.GeoDataFr
         return gdf, prov
 
     if ext not in VECTOR_EXTS:
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"不支持的文件格式：{ext}（支持 GeoJSON/GeoPackage/Shapefile/CSV+经纬度）",
             {"path": str(path)},
@@ -103,10 +103,10 @@ def load_dataset(path_str: str, layer: str | None = None) -> tuple[gpd.GeoDataFr
             target_layer = layer
             if target_layer is None:
                 if len(names) == 0:
-                    raise GeoCoreError(E_BAD_REQUEST, f"GeoPackage 中没有图层：{path}", {"path": str(path)})
+                    raise GisError(E_BAD_REQUEST, f"GeoPackage 中没有图层：{path}", {"path": str(path)})
                 target_layer = names[0]
             elif target_layer not in names:
-                raise GeoCoreError(
+                raise GisError(
                     E_INPUT_MISSING,
                     f"图层不存在：{target_layer}",
                     {"path": str(path), "available_layers": names},
@@ -115,21 +115,21 @@ def load_dataset(path_str: str, layer: str | None = None) -> tuple[gpd.GeoDataFr
             prov = {"format": "gpkg", "path": str(path), "layer": target_layer}
         else:
             if layer:
-                raise GeoCoreError(E_BAD_REQUEST, f"{ext} 格式不支持 layer 参数", {"path": str(path)})
+                raise GisError(E_BAD_REQUEST, f"{ext} 格式不支持 layer 参数", {"path": str(path)})
             gdf = gpd.read_file(path, engine="pyogrio")
             fmt = "geojson" if ext in (".geojson", ".json") else "shapefile"
             prov = {"format": fmt, "path": str(path)}
 
         if len(gdf) == 0:
-            raise GeoCoreError(E_EMPTY_RESULT, f"数据集为空（0 条要素）：{path}", {"path": str(path)})
+            raise GisError(E_EMPTY_RESULT, f"数据集为空（0 条要素）：{path}", {"path": str(path)})
         if gdf.crs is None and ext == ".geojson":
             # RFC 7946: GeoJSON 默认 WGS84
             gdf = gdf.set_crs("EPSG:4326")
         return gdf, prov
-    except GeoCoreError:
+    except GisError:
         raise
     except Exception as exc:  # unreadable/corrupt file etc.
-        raise GeoCoreError(E_BAD_REQUEST, f"读取失败:{exc}", {"path": str(path), "raw_error": repr(exc)}) from exc
+        raise GisError(E_BAD_REQUEST, f"读取失败:{exc}", {"path": str(path), "raw_error": repr(exc)}) from exc
 
 
 def read_json_file(path: Path) -> Any:

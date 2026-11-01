@@ -16,7 +16,7 @@ SYNTH = REPO / "datasets" / "synthetic"
 def run_cli(payload: dict | str) -> tuple[dict, int]:
     raw = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
     proc = subprocess.run(
-        [sys.executable, "-m", "geocore", "run", "--workdir", str(REPO / ".tmp-cli")],
+        [sys.executable, "-m", "claude_gis", "run", "--workdir", str(REPO / ".tmp-cli")],
         input=raw.encode("utf-8"),
         capture_output=True,
         cwd=REPO,

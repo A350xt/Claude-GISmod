@@ -1,5 +1,5 @@
 /**
- * Python 内核桥：`python -X utf8 -m geocore run`，stdin 一条 JSON 请求，stdout 一条封套。
+ * Python 内核桥：`python -X utf8 -m claude_gis run`，stdin 一条 JSON 请求，stdout 一条封套。
  *
  * 不依赖任何宿主框架：只用 $.process.run（参数数组、无 shell）。
  * 内核源码就在本 mod 的 src/ 下，通过 PYTHONPATH 指过去，无需 pip install 本包，
@@ -45,10 +45,10 @@ type Envelope = {
 
 const isWindowsPath = (p: string) => /^[A-Za-z]:[\\/]/.test(p) || p.includes('\\')
 
-/** 解释器探测顺序：配置 → GEOCORE_PYTHON → mod 自带 .venv → python */
+/** 解释器探测顺序：配置 → CLAUDE_GIS_PYTHON → mod 自带 .venv → python */
 export async function resolvePython($: EngineInterface, configured: string): Promise<string> {
   if (configured.trim()) return configured.trim()
-  const fromEnv = await $.env.get('GEOCORE_PYTHON')
+  const fromEnv = await $.env.get('CLAUDE_GIS_PYTHON')
   if (fromEnv?.trim()) return fromEnv.trim()
   const root = $.plugin.root
   const candidates = isWindowsPath(root)
@@ -91,7 +91,7 @@ function hintsFor(raw: string): string[] {
   const low = raw.toLowerCase()
   const hints: string[] = []
   if (low.includes('no module named') || raw.includes('ModuleNotFoundError')) {
-    hints.push('解释器缺少依赖：在 mod 目录执行 `uv venv .venv && uv pip install -e ".[viz,raster]"`，或在 /config 里把 geocore.python 指向已装 geopandas 的解释器')
+    hints.push('解释器缺少依赖：在 mod 目录执行 `uv venv .venv && uv pip install -e ".[viz,raster]"`，或在 /config 里把 gismod.python 指向已装 geopandas 的解释器')
   }
   if (low.includes('proj.db')) {
     hints.push('PROJ 数据库版本冲突：系统的 PROJ_LIB/PROJ_DATA 指向了别的安装（如 PostGIS）')
@@ -112,7 +112,7 @@ export async function callKernel<T = Record<string, unknown>>(
   let ran
   try {
     ran = await $.process.run(
-      [python, '-X', 'utf8', '-m', 'geocore', 'run', '--workdir', cfg.workdir],
+      [python, '-X', 'utf8', '-m', 'claude_gis', 'run', '--workdir', cfg.workdir],
       {
         cwd: cfg.workdir,
         env: await kernelEnv($),
@@ -123,7 +123,7 @@ export async function callKernel<T = Record<string, unknown>>(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new KernelError('E_KERNEL_START', `无法运行 Python 内核（${python}）：${msg}`, {
-      hints: ['确认解释器路径正确；或在 /config 设置 geocore.python', ...hintsFor(msg)],
+      hints: ['确认解释器路径正确；或在 /config 设置 gismod.python', ...hintsFor(msg)],
     })
   }
   if (ran.isStdoutTruncated) {

@@ -8,7 +8,7 @@ from pathlib import Path
 import geopandas as gpd
 from shapely.geometry import Point
 
-from geocore import api
+from claude_gis import api
 
 
 def _pts(path: Path) -> Path:

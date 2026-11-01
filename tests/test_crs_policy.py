@@ -7,7 +7,7 @@ from pathlib import Path
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
 
-from geocore import api
+from claude_gis import api
 
 
 def _pts(tmp_path: Path) -> Path:
@@ -79,9 +79,9 @@ def test_explicit_crs_override(tmp_path: Path):
 def test_invalid_crs_rejected(tmp_path: Path):
     import pytest
 
-    from geocore.protocol import GeoCoreError
+    from claude_gis.protocol import GisError
 
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         api.analyze(tmp_path, {
             "title": "坏 CRS",
             "crs": "EPSG:99999",

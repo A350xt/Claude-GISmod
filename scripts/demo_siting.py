@@ -16,7 +16,7 @@ from pathlib import Path
 
 import geopandas as gpd
 
-from geocore import api
+from claude_gis import api
 
 REPO = Path(__file__).resolve().parents[1]
 DATA = REPO / "datasets" / "synthetic"

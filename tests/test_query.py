@@ -6,10 +6,10 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import box
 
-from geocore.analysis.resolver import DatasetResolver
-from geocore.analysis.query import handle_filter, handle_measure, handle_select
-from geocore.protocol import E_BAD_REQUEST, GeoCoreError
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis.analysis.resolver import DatasetResolver
+from claude_gis.analysis.query import handle_filter, handle_measure, handle_select
+from claude_gis.protocol import E_BAD_REQUEST, GisError
+from claude_gis.runtime.artifact import ArtifactStore
 
 from conftest import UTM
 from helpers import write
@@ -50,7 +50,7 @@ def test_filter_numeric_and_logic(resolver, synthetic_dir):
 
 def test_filter_dangerous_tokens_rejected(resolver, workdir, sq_1km):
     sq_path = write(sq_1km, "sq.geojson", workdir)
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         handle_filter(resolver, {"input": sq_path,
                                  "where": "__import__('os').system('x')"}, "s")
     assert ei.value.code == E_BAD_REQUEST

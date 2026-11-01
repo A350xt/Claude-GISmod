@@ -7,8 +7,8 @@ from pathlib import Path
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
 
-from geocore import api
-from geocore.runtime.artifact import ArtifactStore
+from claude_gis import api
+from claude_gis.runtime.artifact import ArtifactStore
 
 
 def _districts(p: Path) -> Path:
@@ -51,7 +51,7 @@ def _spec(districts: Path, hospitals: Path) -> dict:
             {"id": "sb", "type": "scalebar", "x": .08, "y": .93, "w": .22, "h": .04},
             {"id": "na", "type": "north", "x": .90, "y": .85, "w": .05, "h": .09},
             {"id": "note", "type": "text", "x": .71, "y": .90, "w": .25, "h": .06,
-             "text": "数据：合成数据\n制图：GeoCore", "size": 7},
+             "text": "数据：合成数据\n制图：Claude-GISmod", "size": 7},
         ],
     }
 

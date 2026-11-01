@@ -18,15 +18,15 @@ import operator as _op
 
 import numpy as np
 
-from geocore.analysis.common import StepResult, need, opt
-from geocore.protocol import (
+from claude_gis.analysis.common import StepResult, need, opt
+from claude_gis.protocol import (
     E_BAD_REQUEST,
     E_CRS_AMBIGUOUS,
     E_EMPTY_RESULT,
     E_INPUT_MISSING,
-    GeoCoreError,
+    GisError,
 )
-from geocore.raster_core import (
+from claude_gis.raster_core import (
     MAX_CELLS,
     RasterFrame,
     _check_cells,
@@ -55,7 +55,7 @@ def _raster_param(resolver, token: str, label: str) -> RasterFrame:
 def _vector_param(resolver, token: str, label: str):
     gdf, _ = resolver.frame(str(token))
     if len(gdf) == 0:
-        raise GeoCoreError(E_EMPTY_RESULT, f"{label}：输入为空", {})
+        raise GisError(E_EMPTY_RESULT, f"{label}：输入为空", {})
     return gdf
 
 
@@ -86,7 +86,7 @@ def handle_info(resolver, params, step_id):
 def handle_create(resolver, params, step_id):
     raw_bounds = params.get("bounds")
     if (not isinstance(raw_bounds, (list, tuple)) or len(raw_bounds) != 4):
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            "bounds 需要 [minx, miny, maxx, maxy]（分析坐标系的米制范围）")
     cellsize = float(need(params, "cellsize", "raster.create"))
     value = params.get("value")
@@ -95,11 +95,11 @@ def handle_create(resolver, params, step_id):
         if resolver._analysis_crs is not None:
             crs = resolver._analysis_crs
         else:
-            raise GeoCoreError(E_CRS_AMBIGUOUS,
+            raise GisError(E_CRS_AMBIGUOUS,
                                "create 需要 crs（或先在管线里引用一个输入以确定坐标系）")
     transform, shape = make_transform(raw_bounds, cellsize)
     if shape[0] * shape[1] > MAX_CELLS:
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            f"范围×cellsize 过大（{shape[0]}×{shape[1]}）；请增大 cellsize 或缩小 bounds")
     data = (np.full(shape, float(value), dtype="float32")
             if value is not None else np.full(shape, np.nan, dtype="float32"))
@@ -123,12 +123,12 @@ def handle_from_vector(resolver, params, step_id):
         crs = gdf.crs
         note = f"cellsize={cellsize}（矢量外接矩形）"
     if shape[0] * shape[1] > MAX_CELLS:
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            f"栅格化结果过大（{shape[0]}×{shape[1]}）；请增大 cellsize")
     data = rasterize_vector(gdf, transform, shape, field=field,
                             all_touched=bool(params.get("all_touched", False)))
     if np.all(np.isnan(data)):
-        raise GeoCoreError(E_EMPTY_RESULT,
+        raise GisError(E_EMPTY_RESULT,
                            "栅格化结果全空（矢量可能都在模板范围外）；如属预期请加 allow_empty")
     rf = RasterFrame(data, transform, crs, name=f"{field or 'mask'}")
     return _done(rf, [f"矢量栅格化：{len(gdf)} 要素 → {shape[1]}×{shape[0]} 像元，{note}，"
@@ -167,7 +167,7 @@ def handle_mask(resolver, params, step_id):
         out[~keep] = float(fill)
     n_kept = int(keep.sum())
     if n_kept == 0:
-        raise GeoCoreError(E_EMPTY_RESULT,
+        raise GisError(E_EMPTY_RESULT,
                            "掩膜后全空；如属预期请给该步加 allow_empty")
     rf2 = RasterFrame(out, rf.transform, rf.crs, name=rf.name)
     return _done(rf2, [f"掩膜：保留 {n_kept} / {rf.data.size} 像元"
@@ -178,7 +178,7 @@ def handle_mask(resolver, params, step_id):
 def handle_merge(resolver, params, step_id):
     toks = params.get("inputs")
     if not isinstance(toks, list) or len(toks) < 1:
-        raise GeoCoreError(E_BAD_REQUEST, "merge 需要 inputs（栅格引用数组）")
+        raise GisError(E_BAD_REQUEST, "merge 需要 inputs（栅格引用数组）")
     rfs = [_raster_param(resolver, t, "merge") for t in toks]
     base = rfs[0]
     # 联合范围（贴到 base 网格）
@@ -195,7 +195,7 @@ def handle_merge(resolver, params, step_id):
         canvas[m] = aligned.data[m]
         placed += int(m.sum())
     if placed == 0:
-        raise GeoCoreError(E_EMPTY_RESULT, "镶嵌结果全空")
+        raise GisError(E_EMPTY_RESULT, "镶嵌结果全空")
     rf2 = RasterFrame(canvas, transform, base.crs, name=base.name)
     return _done(rf2, [f"镶嵌 {len(rfs)} 幅 → {shape[1]}×{shape[0]}，有效像元 {placed}"
                        f"（重叠处先到先得）"])
@@ -208,7 +208,7 @@ def _distance_field(resolver, gdf, rf_template: RasterFrame, max_distance_m=None
 
     mask = np.isfinite(rasterize_vector(gdf, rf_template.transform, rf_template.data.shape))
     if not mask.any():
-        raise GeoCoreError(E_EMPTY_RESULT, "源要素栅格化为空（可能在模板范围外）")
+        raise GisError(E_EMPTY_RESULT, "源要素栅格化为空（可能在模板范围外）")
     dist = ndimage.distance_transform_edt(~mask,
                                           sampling=(rf_template.cellsize, rf_template.cellsize))
     out = dist.astype("float32")
@@ -247,11 +247,11 @@ def handle_distance(resolver, params, step_id):
 def handle_distance_decay(resolver, params, step_id):
     d0 = float(need(params, "d0", "raster.distance_decay"))
     if d0 <= 0:
-        raise GeoCoreError(E_BAD_REQUEST, f"d0 必须为正数：{d0}")
+        raise GisError(E_BAD_REQUEST, f"d0 必须为正数：{d0}")
     f0 = float(opt(params, "f0", 100.0))
     mode = str(opt(params, "mode", "linear"))
     if mode not in _DECAY_MODES:
-        raise GeoCoreError(E_BAD_REQUEST, f"未知 mode：{mode}（可选 {_DECAY_MODES}）")
+        raise GisError(E_BAD_REQUEST, f"未知 mode：{mode}（可选 {_DECAY_MODES}）")
     gdf = _vector_param(resolver, need(params, "input", "raster.distance_decay"), "decay")
     cellsize = opt(params, "cellsize", None)
     if cellsize is None:
@@ -289,7 +289,7 @@ def _cost_dijkstra(cost: np.ndarray, sources: np.ndarray, cellsize: float):
             dist[r, c] = 0.0
             heapq.heappush(pq, (0.0, int(r), int(c)))
     if not pq:
-        raise GeoCoreError(E_EMPTY_RESULT, "成本距离：没有落在可通行区的源像元")
+        raise GisError(E_EMPTY_RESULT, "成本距离：没有落在可通行区的源像元")
     nb = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
     while pq:
         d, r, c = heapq.heappop(pq)
@@ -314,7 +314,7 @@ def handle_cost_distance(resolver, params, step_id):
     src = _source_mask(resolver, src_tok, cost)
     dist, _back = _cost_dijkstra(np.asarray(cost.data, dtype="float64"), src, cost.cellsize)
     if np.all(np.isnan(dist)):
-        raise GeoCoreError(E_EMPTY_RESULT, "成本距离全空（源与成本面不连通？）")
+        raise GisError(E_EMPTY_RESULT, "成本距离全空（源与成本面不连通？）")
     rf = RasterFrame(dist.astype("float32"), cost.transform, cost.crs, name="cost_dist")
     return _done(rf, [f"累积成本距离：单位 = cost值×米；NoData/≤0 成本视为不可通行"])
 
@@ -337,9 +337,9 @@ def handle_cost_path(resolver, params, step_id):
     r, c = int(round(row_f)), int(round(col_f))
     h, w = cost.shape
     if not (0 <= r < h and 0 <= c < w):
-        raise GeoCoreError(E_BAD_REQUEST, "目标点在成本栅格范围外")
+        raise GisError(E_BAD_REQUEST, "目标点在成本栅格范围外")
     if not np.isfinite(dist[r, c]):
-        raise GeoCoreError(E_EMPTY_RESULT,
+        raise GisError(E_EMPTY_RESULT,
                            "目标不可达（与源不连通或被 NoData/零成本阻断）")
     cells = [(r, c)]
     while back[r, c] != -1:
@@ -360,7 +360,7 @@ def _source_mask(resolver, tok: str, template: RasterFrame) -> np.ndarray:
     if tok.startswith("@") or tok.startswith("ar_") or tok.lower().endswith((".tif", ".tiff")):
         try:
             rf = _raster_param(resolver, tok, "source")
-        except GeoCoreError:
+        except GisError:
             gdf = _vector_param(resolver, tok, "source")
         else:
             rf = _warn_aligned(resolver, "source", rf, template)
@@ -387,7 +387,7 @@ def handle_nearest(resolver, params, step_id):
                            transform, shape, field="_nid")
     source_mask = np.isfinite(ids)
     if not source_mask.any():
-        raise GeoCoreError(E_EMPTY_RESULT, "参照层栅格化为空")
+        raise GisError(E_EMPTY_RESULT, "参照层栅格化为空")
     _, (ir, ic) = ndimage.distance_transform_edt(
         ~source_mask, return_indices=True,
         sampling=(float(cellsize), float(cellsize)))
@@ -461,7 +461,7 @@ def _parse_condition(expr: str):
             try:
                 thr = float(right)
             except ValueError:
-                raise GeoCoreError(
+                raise GisError(
                     E_BAD_REQUEST,
                     f"condition 右侧需为数字：{expr!r}",
                     {"grammar": "值 <op> 数字，如 'value >= 500' 或 'nodata'；"
@@ -469,7 +469,7 @@ def _parse_condition(expr: str):
             def make(fn, thr):
                 return lambda arr: fn(arr, thr)
             return make(fn, thr)
-    raise GeoCoreError(E_BAD_REQUEST,
+    raise GisError(E_BAD_REQUEST,
                        f"无法解析 condition：{expr!r}",
                        {"grammar": "'value >= 500' / 'dist < d0' / 'nodata'"})
 
@@ -478,10 +478,10 @@ def handle_calc(resolver, params, step_id):
     expr = str(need(params, "expression", "raster.calc"))
     inputs = params.get("inputs")
     if not isinstance(inputs, dict) or not inputs:
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            "calc 需要 inputs：{别名: 栅格引用}，表达式中用别名引用")
     if len(inputs) > 8:
-        raise GeoCoreError(E_BAD_REQUEST, "calc 最多 8 个输入栅格")
+        raise GisError(E_BAD_REQUEST, "calc 最多 8 个输入栅格")
     rfs = {str(alias): _raster_param(resolver, tok, "calc")
            for alias, tok in inputs.items()}
     first = next(iter(rfs.values()))
@@ -496,10 +496,10 @@ def handle_calc(resolver, params, step_id):
         if isinstance(node, ast.Constant):
             if isinstance(node.value, (int, float)):
                 return node.value
-            raise GeoCoreError(E_BAD_REQUEST, f"不允许的常量：{node.value!r}")
+            raise GisError(E_BAD_REQUEST, f"不允许的常量：{node.value!r}")
         if isinstance(node, ast.Name):
             if node.id not in names:
-                raise GeoCoreError(E_BAD_REQUEST,
+                raise GisError(E_BAD_REQUEST,
                                    f"表达式中引用了未声明的别名：{node.id}",
                                    {"declared": sorted(names)})
             return names[node.id]
@@ -513,7 +513,7 @@ def handle_calc(resolver, params, step_id):
                 and not node.keywords:
             args = [ev(a, names) for a in node.args]
             return _FUNCS[node.func.id](*args)
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"表达式含不允许的语法：{expr!r}",
             {"allowed": "四则/乘方/取模 + abs/min/max/round/clip/sqrt/exp/ln(别名…)"},
@@ -532,7 +532,7 @@ def handle_reclassify(resolver, params, step_id):
     mapping = params.get("mapping")
     if (not isinstance(mapping, list) or not mapping
             or not all(isinstance(m, (list, tuple)) and len(m) == 3 for m in mapping)):
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             "mapping 需要 [[lo, hi, new], …] 行表（左闭右开）",
             {"example": "[[0, 200, 1], [200, 400, 2]]"},
@@ -547,7 +547,7 @@ def handle_reclassify(resolver, params, step_id):
     if params.get("nodata") is not None:
         out[np.isnan(v)] = float(params["nodata"])
     if n_mapped == 0:
-        raise GeoCoreError(E_EMPTY_RESULT,
+        raise GisError(E_EMPTY_RESULT,
                            "重分类没有任何像元落表；检查区间与数值范围（可用 raster.breaks 先看断点）")
     rf2 = RasterFrame(out, rf.transform, rf.crs, name="class")
     classes = sorted({float(m[2]) for m in mapping})
@@ -559,11 +559,11 @@ def handle_breaks(resolver, params, step_id):
     rf = _raster_param(resolver, need(params, "input", "raster.breaks"), "breaks")
     k = int(opt(params, "classes", 5))
     if not 2 <= k <= 20:
-        raise GeoCoreError(E_BAD_REQUEST, f"classes 需在 2..20：{k}")
+        raise GisError(E_BAD_REQUEST, f"classes 需在 2..20：{k}")
     method = str(opt(params, "method", "quantile"))
     v = rf.data[np.isfinite(rf.data)]
     if v.size < k:
-        raise GeoCoreError(E_EMPTY_RESULT, f"有效像元 {v.size} 少于 classes {k}")
+        raise GisError(E_EMPTY_RESULT, f"有效像元 {v.size} 少于 classes {k}")
     if method == "equal_interval":
         breaks = np.linspace(float(v.min()), float(v.max()), k + 1).tolist()
     elif method == "quantile":
@@ -571,7 +571,7 @@ def handle_breaks(resolver, params, step_id):
     elif method == "jenks":
         breaks = _jenks(v, k)
     else:
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            f"未知 method：{method}（可选 equal_interval/quantile/jenks）")
     breaks = sorted(set(round(float(b), 6) for b in breaks))
     table = {"columns": ["idx", "lo", "hi"], "rows": [
@@ -635,7 +635,7 @@ def handle_histogram(resolver, params, step_id):
     rf = _raster_param(resolver, need(params, "input", "raster.histogram"), "histogram")
     bins = int(opt(params, "bins", 20))
     if not 2 <= bins <= 200:
-        raise GeoCoreError(E_BAD_REQUEST, f"bins 需在 2..200：{bins}")
+        raise GisError(E_BAD_REQUEST, f"bins 需在 2..200：{bins}")
     v = rf.data[np.isfinite(rf.data)]
     counts, edges = np.histogram(v, bins=bins)
     total = int(counts.sum())
@@ -654,14 +654,14 @@ def handle_weighted_sum(resolver, params, step_id):
     items = params.get("inputs")
     if (not isinstance(items, list) or len(items) < 1
             or not all(isinstance(x, dict) and "ref" in x for x in items)):
-        raise GeoCoreError(E_BAD_REQUEST,
+        raise GisError(E_BAD_REQUEST,
                            "inputs 需要 [{ref, weight}, …]（weight 可省略=1）")
     weights = [float(x.get("weight", 1.0)) for x in items]
     if any(w < 0 for w in weights):
-        raise GeoCoreError(E_BAD_REQUEST, "weight 不能为负")
+        raise GisError(E_BAD_REQUEST, "weight 不能为负")
     total_w = sum(weights)
     if total_w <= 0:
-        raise GeoCoreError(E_BAD_REQUEST, "weight 全为 0，无法归一化")
+        raise GisError(E_BAD_REQUEST, "weight 全为 0，无法归一化")
     first = _raster_param(resolver, items[0]["ref"], "weighted_sum")
     acc = np.zeros(first.data.shape, dtype="float64")
     hit = np.zeros(first.data.shape, dtype=bool)
@@ -685,10 +685,10 @@ def handle_focal(resolver, params, step_id):
     stat = str(opt(params, "stat", "mean")).lower()
     known = {"mean", "min", "max", "median", "std"}
     if stat not in known:
-        raise GeoCoreError(E_BAD_REQUEST, f"未知 stat：{stat}（可选 {sorted(known)}）")
+        raise GisError(E_BAD_REQUEST, f"未知 stat：{stat}（可选 {sorted(known)}）")
     k = int(opt(params, "kernel_size", 3))
     if k < 3 or k % 2 == 0 or k > 15:
-        raise GeoCoreError(E_BAD_REQUEST, f"kernel_size 需为 3..15 的奇数：{k}")
+        raise GisError(E_BAD_REQUEST, f"kernel_size 需为 3..15 的奇数：{k}")
     pad = k // 2
     padded = np.pad(rf.data, pad, constant_values=np.nan)
     from numpy.lib.stride_tricks import sliding_window_view
@@ -715,12 +715,12 @@ def handle_zonal_stats(resolver, params, step_id):
     regions = _vector_param(resolver, need(params, "regions", "raster.zonal_stats"), "zonal")
     rf = _raster_param(resolver, need(params, "data", "raster.zonal_stats"), "zonal.data")
     if not set(map(str, regions.geometry.geom_type)) <= {"Polygon", "MultiPolygon"}:
-        raise GeoCoreError(E_BAD_REQUEST, "regions 必须是面要素")
+        raise GisError(E_BAD_REQUEST, "regions 必须是面要素")
     stats = [str(s) for s in opt(params, "stats", ["mean", "min", "max"])]
     known = {"count", "mean", "min", "max", "sum", "majority"}
     unknown = set(stats) - known
     if unknown:
-        raise GeoCoreError(E_BAD_REQUEST, f"未知统计量：{sorted(unknown)}", {"known": sorted(known)})
+        raise GisError(E_BAD_REQUEST, f"未知统计量：{sorted(unknown)}", {"known": sorted(known)})
     from rasterio.features import geometry_mask
 
     out = regions.reset_index(drop=True).copy()
@@ -773,7 +773,7 @@ def handle_polygonize(resolver, params, step_id):
         geoms.append(shp_shape(geom))
         values.append(float(val))
     if not geoms:
-        raise GeoCoreError(E_EMPTY_RESULT, "没有可转换的有效像元")
+        raise GisError(E_EMPTY_RESULT, "没有可转换的有效像元")
     out = gpd.GeoDataFrame({"value": values}, geometry=geoms, crs=rf.crs)
     field_name = str(opt(params, "field", "value"))
     out = out.rename(columns={"value": field_name})
@@ -794,10 +794,10 @@ def handle_contour(resolver, params, step_id):
     if levels is None and interval is None:
         v = rf.data[np.isfinite(rf.data)]
         if v.size == 0:
-            raise GeoCoreError(E_EMPTY_RESULT, "无有效像元")
+            raise GisError(E_EMPTY_RESULT, "无有效像元")
         span = float(v.max() - v.min())
         if span == 0:
-            raise GeoCoreError(E_EMPTY_RESULT, "数值无变化，提不出等值线")
+            raise GisError(E_EMPTY_RESULT, "数值无变化，提不出等值线")
         interval = span / 8.0
     if levels is None:
         v = rf.data[np.isfinite(rf.data)]
@@ -805,7 +805,7 @@ def handle_contour(resolver, params, step_id):
         levels = [round(float(x), 6) for x in
                   np.arange(lo + float(interval), hi, float(interval))]
         if not levels:
-            raise GeoCoreError(E_EMPTY_RESULT,
+            raise GisError(E_EMPTY_RESULT,
                                f"interval={interval} 内没有任何等值线级别")
     import matplotlib
 
@@ -823,7 +823,7 @@ def handle_contour(resolver, params, step_id):
         try:
             cs = ax.contour(x, y, rf.data, levels=levels)
         except ValueError as exc:
-            raise GeoCoreError(E_BAD_REQUEST, f"等值线提取失败（检查 levels）：{exc}") from exc
+            raise GisError(E_BAD_REQUEST, f"等值线提取失败（检查 levels）：{exc}") from exc
         geoms, values = [], []
         from matplotlib.path import Path as MplPath
 
@@ -846,7 +846,7 @@ def handle_contour(resolver, params, step_id):
     finally:
         plt.close(fig)
     if not geoms:
-        raise GeoCoreError(E_EMPTY_RESULT, "没有提取到等值线（levels 可能都在值域外）")
+        raise GisError(E_EMPTY_RESULT, "没有提取到等值线（levels 可能都在值域外）")
     out = gpd.GeoDataFrame({"level": values}, geometry=geoms, crs=rf.crs)
     return StepResult(out, [
         f"等值线：{len(set(values))} 个级别 / {len(geoms)} 段线（级别字段 level）",

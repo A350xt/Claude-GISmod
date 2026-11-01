@@ -10,8 +10,8 @@ import geopandas as gpd
 import pandas as pd
 from shapely import LineString
 
-from geocore.analysis.common import StepResult, need, opt
-from geocore.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_INPUT_MISSING, GeoCoreError, json_safe
+from claude_gis.analysis.common import StepResult, need, opt
+from claude_gis.protocol import E_BAD_REQUEST, E_EMPTY_RESULT, E_INPUT_MISSING, GisError, json_safe
 
 TRACK_SUMMARY_LIMIT = 20
 
@@ -22,7 +22,7 @@ def handle_trajectory(resolver, params: dict, step_id: str) -> StepResult:
     gdf, _ = resolver.frame(need(params, "input", "trajectory.build"))
 
     if time_field not in gdf.columns:
-        raise GeoCoreError(
+        raise GisError(
             E_INPUT_MISSING,
             f"时间字段不存在：{time_field}",
             {"columns": [str(c) for c in gdf.columns]},
@@ -33,7 +33,7 @@ def handle_trajectory(resolver, params: dict, step_id: str) -> StepResult:
         ts = pd.to_datetime(ts, errors="coerce")
     n_ok = int(ts.notna().sum())
     if n_ok < 2:
-        raise GeoCoreError(
+        raise GisError(
             E_BAD_REQUEST,
             f"time_field={time_field} 无法解析为时间（有效 {n_ok} / {len(gdf)} 条），"
             "请检查格式（支持 ISO 8601，如 2024-09-01T12:00:00）",
@@ -43,7 +43,7 @@ def handle_trajectory(resolver, params: dict, step_id: str) -> StepResult:
     if group_by is not None:
         group_by = str(group_by)
         if group_by not in gdf.columns:
-            raise GeoCoreError(
+            raise GisError(
                 E_INPUT_MISSING,
                 f"分组字段不存在：{group_by}",
                 {"columns": [str(c) for c in gdf.columns]},
@@ -73,7 +73,7 @@ def handle_trajectory(resolver, params: dict, step_id: str) -> StepResult:
         })
 
     if not geoms:
-        raise GeoCoreError(
+        raise GisError(
             E_EMPTY_RESULT,
             "没有任何分组能构成轨迹（每组至少需要 2 个带有效时间的点）",
             {"skipped_groups": skipped},

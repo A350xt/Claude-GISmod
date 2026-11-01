@@ -10,8 +10,8 @@ from pathlib import Path
 import geopandas as gpd
 import pytest
 
-from geocore.analysis.executor import execute_analyze
-from geocore.protocol import E_INPUT_MISSING, GeoCoreError
+from claude_gis.analysis.executor import execute_analyze
+from claude_gis.protocol import E_INPUT_MISSING, GisError
 
 SYNTH = Path(__file__).resolve().parents[1] / "datasets" / "synthetic"
 
@@ -52,7 +52,7 @@ def test_second_call_reads_intermediate_layer(tmp_path):
 def test_unknown_step_reference_fails_loudly(tmp_path):
     first = execute_analyze(tmp_path, {"title": "t", "operations": SITE_OPS})
     bad_token = f"{first['artifact_id']}#不存在"
-    with pytest.raises(GeoCoreError) as ei:
+    with pytest.raises(GisError) as ei:
         execute_analyze(tmp_path, {
             "title": "bad",
             "operations": [{"id": "x", "op": "query.measure",
