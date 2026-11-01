@@ -34,7 +34,7 @@ def inspect(payload: dict) -> dict:
             "supported_formats_note": "栅格已支持（raster 域算子）；多波段先指定 band",
             "notes": [
                 f"NoData 占比 {meta['nodata_pct']}%",
-                "栅格化/重采样/统计请走 gis_analyze 的 raster.* 词表",
+                "栅格化/重采样/统计请走 analyze 工具的 raster.* 词表",
             ],
         }
     gdf, prov = load_dataset(path)
@@ -116,31 +116,17 @@ def visualize(workdir: Path, payload: dict) -> dict:
     else:
         artifact_id, _ = store.create("map", title)
 
-    # 制图保持源 CRS（避免坐标轴出现米制刻度）；多层仍自动对齐到首个输入
-    resolver = DatasetResolver(store, crs_override="source")
+    # 制图坐标系：缺省保持源 CRS；"utm" 交给自动选择（地理坐标 → UTM）；也可给 EPSG 串。
+    # 多层（base）始终对齐到同一坐标系
+    crs_req = str(payload.get("crs") or "source").strip()
+    resolver = DatasetResolver(store, crs_override=None if crs_req.lower() == "utm" else crs_req)
     base_gdf = None
     if base:
         base_gdf, _ = resolver.frame(str(base))
 
     out_path = store.image_path_for(artifact_id, title)
 
-    def _is_raster_source(tok: str) -> bool:
-        from geocore.analysis.resolver import parse_step_ref
-
-        if is_raster_path(tok):
-            return True
-        if is_artifact_token(tok):
-            meta = store.get(tok)
-            return str((meta.get("result") or {}).get("format", "")).lower() in ("tif", "tiff")
-        step_ref = parse_step_ref(tok)
-        if step_ref:
-            meta = store.get(step_ref[0])
-            info = (meta.get("intermediate_layers") or {}).get(step_ref[1]) or {}
-            return str(info.get("kind", "")) == "raster" or \
-                str(info.get("layer", "")).lower().endswith(".tif")
-        return False
-
-    if _is_raster_source(source):
+    if _is_raster_source(store, source):
         # 栅格制图：连续色带拉伸 / 分类色表
         from geocore.viz.map import render_raster
 
@@ -170,7 +156,7 @@ def visualize(workdir: Path, payload: dict) -> dict:
 
 
 def compose(workdir: Path, payload: dict) -> dict:
-    """版面合成（Studio 制图模式的导出/预览出口，预览与成品同一渲染器）。"""
+    """版面合成：多图层 + 图例/比例尺/指北针的成品版面 PNG。"""
     from geocore.viz.compose import render_composition
 
     spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else payload
@@ -206,115 +192,116 @@ def list_operations() -> dict:
     return {"operations": sorted(OP_HANDLERS)}
 
 
-# --------------------------------------------------------------- Studio 支持
+# --------------------------------------------------------------- 面板支持
 
 
-def read_layer(workdir: Path, payload: dict) -> dict:
-    """把数据集 / artifact 最终结果 / artifact 中间步骤导出为 WGS84 GeoJSON。
-
-    供地图前端渲染：任何来源统一重投影到 EPSG:4326，超大图层按 max_features 截断。
-    """
+def _is_raster_source(store: ArtifactStore, tok: str) -> bool:
+    """来源是否为栅格：.tif 路径 / 栅格产物 / 栅格中间步骤。"""
     from geocore.analysis.resolver import parse_step_ref
+    from geocore.raster_core import is_raster_path
     from geocore.runtime.artifact import is_artifact_token
 
+    if is_raster_path(tok):
+        return True
+    if is_artifact_token(tok):
+        meta = store.get(tok)
+        return str((meta.get("result") or {}).get("format", "")).lower() in ("tif", "tiff")
+    step_ref = parse_step_ref(tok)
+    if step_ref:
+        meta = store.get(step_ref[0])
+        info = (meta.get("intermediate_layers") or {}).get(step_ref[1]) or {}
+        return str(info.get("kind", "")) == "raster" or             str(info.get("layer", "")).lower().endswith(".tif")
+    return False
+
+
+def preview(workdir: Path, payload: dict) -> dict:
+    """面板缩略图：数据集路径 / artifact_id / artifact_id#步骤 → 地图卡片 SVG（+ 可选 PNG）与摘要。
+
+    请求：{source, crs?: "source"|"utm"|"EPSG:xxxx", png?: bool}。
+    crs 只影响显示（重投影后出图、范围按该坐标系给出），不改动任何数据。
+    """
+    import base64
+
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from geocore.analysis.resolver import DatasetResolver
+    from geocore.viz import preview as pv
+
     source = str(payload.get("source") or "")
-    max_features = int(payload.get("max_features") or 5000)
-    max_features = max(1, min(max_features, 50_000))
-    wanted_fields = payload.get("fields")
-    if wanted_fields is not None and not isinstance(wanted_fields, list):
-        raise GeoCoreError(E_BAD_REQUEST, "fields 必须是字段名数组")
+    if not source:
+        raise GeoCoreError(E_BAD_REQUEST, "preview 需要 source（路径或 artifact_id）")
+    want_png = bool(payload.get("png"))
+    crs_req = str(payload.get("crs") or "source")
+    store = ArtifactStore(Path(workdir))
+    resolver = DatasetResolver(store, crs_override="source")
+    title = Path(source).stem if not source.startswith("ar_") else source
 
-    layer = None
-    artifact_id = None
-    if is_artifact_token(source):
-        artifact_id = source
-        store = ArtifactStore(Path(workdir))
-        meta = store.get(artifact_id)  # 存在性校验
-        if str((meta.get("result") or {}).get("format", "")).lower() in ("tif", "tiff"):
-            raise GeoCoreError(
-                E_BAD_REQUEST,
-                "这是栅格产物，Studio 地图暂不支持栅格上图；请在 DSH 里用 gis_visualize 制图，"
-                "或先 raster.polygonize 转矢量",
-                {"artifact": artifact_id},
-            )
-        path = store.resolve_result_path(artifact_id)
-    elif (step_ref := parse_step_ref(source)):
-        artifact_id, step_id = step_ref
-        store = ArtifactStore(Path(workdir))
-        meta = store.get(artifact_id)
-        steps_index = meta.get("intermediate_layers") or {}
-        if step_id not in steps_index:
-            raise GeoCoreError(
-                E_INPUT_MISSING,
-                f"artifact {artifact_id} 没有中间步骤 {step_id}",
-                {"available_steps": sorted(steps_index)},
-            )
-        path = store.resolve_result_path(artifact_id)
-        layer = steps_index[step_id]["layer"]
+    if _is_raster_source(store, source):
+        rf, _ = resolver.raster(source)
+        source_crs = pv.resolve_display_crs(rf.crs, "source")
+        footprint = gpd.GeoDataFrame(geometry=[box(*rf.bounds)], crs=rf.crs)
+        target = pv.resolve_display_crs(rf.crs, crs_req, footprint)
+        rf = pv.reproject_raster(rf, target)
+        svg, png = pv.raster_svg(rf, title)
+        m = rf.meta()
+        out = {
+            "kind": "raster",
+            "meta": {
+                "shape": m["shape"], "cellsize": m["cellsize"],
+                "nodata_pct": m["nodata_pct"], "quantiles": m["quantiles"],
+                "bounds": [float(v) for v in rf.bounds],
+            },
+        }
     else:
-        path = Path(source)
-        if not path.is_absolute() or not path.exists():
-            raise GeoCoreError(E_INPUT_MISSING, f"输入不存在：{source}", {"source": source})
-
-    gdf, _prov = load_dataset(str(path), layer=layer)
-
-    src_crs = gdf.crs.to_string() if gdf.crs is not None else None
-    warnings: list[str] = []
-    if gdf.crs is None:
-        gdf = assume_missing_crs(gdf, str(path.name), warnings)
-        src_crs = gdf.crs.to_string()
-
-    total = int(len(gdf))
-    truncated = False
-    if total > max_features:
-        gdf = gdf.head(max_features)
-        truncated = True
-        warnings.append(f"图层过大：仅返回前 {max_features} / {total} 个要素")
-
-    if wanted_fields:
-        missing = [f for f in wanted_fields if f not in gdf.columns]
-        if missing:
-            raise GeoCoreError(E_INPUT_MISSING, f"字段不存在：{missing}",
-                               {"available": list(map(str, gdf.columns))})
-        gdf = gdf[list(wanted_fields) + [gdf.geometry.name]]
-
-    if gdf.crs is not None and gdf.crs.is_projected:
-        gdf = gdf.to_crs("EPSG:4326")
-
-    # datetime 列转 ISO 字符串：to_json 不处理 datetime64，会整包失败
-    for col in gdf.columns:
-        if pd.api.types.is_datetime64_any_dtype(gdf[col]):
-            gdf[col] = gdf[col].astype(str).replace({"NaT": None, "nan": None})
-
-    try:
-        geojson = json.loads(gdf.to_json(drop_id=True))
-    except Exception as exc:
-        raise GeoCoreError(E_OUTPUT_ERROR, f"GeoJSON 序列化失败：{exc}") from exc
-
-    return {
+        gdf, _ = resolver.frame(source)
+        source_crs = gdf.crs
+        target = pv.resolve_display_crs(gdf.crs, crs_req, gdf)
+        if target is not None and gdf.crs is not None and gdf.crs != target:
+            gdf = gdf.to_crs(target)
+        svg = pv.vector_svg(gdf, title)
+        png = pv.vector_png(gdf) if want_png else b""
+        types: dict[str, int] = {}
+        for t in map(str, gdf.geometry.geom_type):
+            types[t] = types.get(t, 0) + 1
+        fields = []
+        for col in gdf.columns:
+            if col == gdf.geometry.name:
+                continue
+            samples = [json_safe(v) for v in pd.unique(gdf[col].dropna())[:2]]
+            fields.append({"name": str(col), "dtype": str(gdf[col].dtype), "samples": samples})
+        out = {
+            "kind": "vector",
+            "meta": {
+                "count": int(len(gdf)),
+                "geometry_types": types,
+                "bounds": [float(v) for v in gdf.total_bounds] if len(gdf) else None,
+                "fields": fields[:40],
+            },
+        }
+    display = target if target is not None else source_crs
+    out["meta"].update({
+        "crs": display.to_string() if display is not None else None,
+        "crs_label": pv.crs_label(display),
+        "crs_units": ("度" if display is not None and display.is_geographic else
+                      (display.axis_info[0].unit_name if display is not None else "")),
+        "source_crs": source_crs.to_string() if source_crs is not None else None,
+    })
+    out.update({
         "source": source,
-        "artifact": artifact_id,
-        "layer": layer,
-        "geojson": geojson,
-        "meta": {
-            "count_total": total,
-            "count_returned": int(len(gdf)),
-            "truncated": truncated,
-            "crs_source": src_crs,
-            "crs_display": "EPSG:4326",
-            "geometry_types": sorted({str(t) for t in gdf.geometry.geom_type}),
-            "fields": [str(c) for c in gdf.columns if c != gdf.geometry.name],
-        },
-        "warnings": warnings,
-    }
+        "svg": svg,
+        "png_base64": base64.b64encode(png).decode("ascii") if want_png and png else None,
+        "warnings": list(dict.fromkeys(resolver.warnings)),
+    })
+    return out
 
 
 def list_inventory(workdir: Path, payload: dict) -> dict:
-    """数据集 + artifacts 清单（Studio 图层面板数据源）。
+    """数据集 + artifacts 清单（面板数据源）。
 
-    数据集来源优先级（对齐「Studio 只见当前 agent 项目」的原则）：
-    1. agent-used：artifact 元数据里记录的 inputs（agent 实际用过的文件）；
-    2. workspace：请求给定的 datasets_dirs（DSH 工作区根）做有上限的浅扫描；
+    数据集来源优先级：
+    1. agent-used：artifact 元数据里记录的 inputs（Claude 实际用过的文件）；
+    2. workspace：请求给定的 datasets_dirs（通常是会话工作目录）做有上限的浅扫描；
     3. 兼容旧 datasets_dir 单目录参数。
     坏 meta 跳过并计数，绝不让整个清单失败。
     """
@@ -389,14 +376,15 @@ def list_inventory(workdir: Path, payload: dict) -> dict:
             "warnings": len(meta.get("warnings") or []),
             "steps": meta.get("steps") or [],
             "intermediate_layers": meta.get("intermediate_layers") or {},
+            "images": ([meta["image"]] if meta.get("image") else [])
+            + [img.get("path") for img in meta.get("images") or [] if img.get("path")],
         })
     out["artifacts"].reverse()  # 新的在前
     return out
 
 
 _SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist",
-              "web-dist", "lib", "build", ".mimosa", ".zcode", ".pytest_cache",
-              "tmp-visual", ".tmp-cli", "edge-profile"}
+              "build", ".pytest_cache", "artifacts", ".claude", ".claude-plugin"}
 
 
 def _looks_like_geojson(path: Path) -> bool:

@@ -1,4 +1,4 @@
-"""Wire protocol shared by CLI, bridge tests and the DSH plugin.
+"""Wire protocol shared by the CLI, the Claude Code mod and the tests.
 
 Every command emits a single JSON envelope on stdout:
 

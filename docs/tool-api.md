@@ -1,18 +1,23 @@
-# 工具 API 契约（v0.2，Phase 1 Vector Core）
+# 工具 API 契约（v0.3）
 
-三个工具构成模型的全部 GIS 表达面。所有响应都是单条 JSON 封套：
+三个工具构成 Claude 的全部 GIS 表达面，由 mod 注册为
+`mcp__geocore__inspect / analyze / visualize`（定义见 [hooks/tools.ts](../hooks/tools.ts)）。
+
+内核层面每个请求返回一条 JSON 封套：
 
 ```json
 { "ok": true,  "result": { ... } }
 { "ok": false, "error": { "code": "…", "message": "…", "details": { … } } }
 ```
 
+成功时 mod 把 `result` 交给 Claude；失败时工具调用被拒绝，Claude 读到 `错误码: 信息 + details`。
+
 错误码（稳定契约）：
 
 | code | 触发场景 | 模型应如何反应 |
 | --- | --- | --- |
 | `E_BAD_REQUEST` | 参数缺失/类型错/where 非法/非法 artifact_id | 读取 details 修正后重试 |
-| `E_INPUT_MISSING` | 路径不存在 / 图层或字段缺失 / artifact 不存在 | 先 `gis_inspect` 摸清输入 |
+| `E_INPUT_MISSING` | 路径不存在 / 图层或字段缺失 / artifact 不存在 | 先 `inspect` 摸清输入 |
 | `E_CRS_AMBIGUOUS` | 数据缺 CRS 且坐标不在经纬度值域 | 让用户提供 CRS 或先转换 |
 | `E_OP_UNKNOWN` | op 名不在词表 | 使用 details.available 中的名字 |
 | `E_GEOMETRY_INVALID_UNFIXABLE` | make_valid 也救不了 | 放弃该层或请用户清洗 |
@@ -22,7 +27,7 @@
 
 ---
 
-## gis_inspect
+## inspect（mcp__geocore__inspect）
 
 请求：`{ "path": "<GeoJSON|GPKG|SHP|CSV(含 lon/lat 列)>" }`
 GPKG 可选 `"layer"`；多图层时缺省取第一层。
@@ -34,7 +39,7 @@ capabilities[]/notes[]`。
 使用教条：**遇到陌生数据，第一步永远是 inspect**。由 quality 决定是否需要预处理，
 由 capabilities 声明当前内核能做什么。
 
-## gis_analyze
+## analyze（mcp__geocore__analyze）
 
 请求：`{ title?, crs?, operations: Op[], output?: { format: "gpkg"|"geojson" } }`
 
@@ -142,7 +147,7 @@ CRS 承诺（v0.2 起）：
 中文文件名、中文属性值、中文标题在任何 locale 的宿主（含中文 Windows 的 GBK
 默认代码页）下均原样往返。
 
-## gis_visualize
+## visualize（mcp__geocore__visualize）
 
 请求：`{ source, base?, base_style?, title?, style? }`
 source 同上三种引用写法；写入既有 artifact 目录或新建 map 类型 artifact。

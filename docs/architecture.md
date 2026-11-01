@@ -1,8 +1,8 @@
 # 架构总览
 
-> DSH GeoCore —— Agent-native GIS Runtime。目标不是复刻 QGIS 的按钮，
-> 而是：**让 DeepSeek Harness 通过极少数工具组合解决通用 2D 矢量分析任务**。
-> "95% 覆盖"必须由 benchmark 证明，不由主观判断（见 §基准与治理）。
+> GeoCore —— Agent-native GIS Runtime。目标不是复刻 QGIS 的按钮，
+> 而是：**让 Claude 通过极少数工具组合解决通用 2D 空间分析任务**。
+> "覆盖率"必须由 benchmark 证明，不由主观判断（见 §基准与治理）。
 
 ## 一、三层结构
 
@@ -10,31 +10,35 @@
  用户自然语言
       │
       ▼
- DeepSeek Harness Agent
-      │  gis_inspect / gis_analyze / gis_visualize        ← 模型永远只见这 3 个工具
+ Claude Code
+      │  mcp__geocore__inspect / analyze / visualize      ← 模型永远只见这 3 个工具
       ▼
- ┌─────────────────────────────┐
- │ plugin-geocore (TS, cordis) │  GisService('gis') ＋ ctx.tools 注册
- │ 薄适配层                    │  别名解析・超时・封套校验
- └──────────────┬──────────────┘
-                │ stdin/stdout 单条 JSON 封套（每请求一个 python 进程）
-                ▼
- ┌─────────────────────────────┐
- │ geocore (Python, 无状态)     │
- │  runtime   数据/CRS/Artifact│
- │  analysis  四类原语执行器    │
- │  providers 地理栈后端        │
- │  viz       专题图            │
- └─────────────────────────────┘
+ ┌──────────────────────────────────┐
+ │ GeoCore mod（hooks/，TypeScript） │  tools.ts   工具描述与参数 schema
+ │ 薄适配层 + 侧边面板               │  kernel.ts  $.process.run 调内核、封套解析、错误提示
+ │                                  │  store.ts / panel.tsx  面板状态与绘制
+ └───────────────┬──────────────────┘
+                 │ stdin/stdout 单条 JSON 封套（每请求一个 python 进程）
+                 ▼
+ ┌──────────────────────────────────┐
+ │ geocore（src/，Python，无状态）    │
+ │  runtime   数据/CRS/Artifact      │
+ │  analysis  原语执行器              │
+ │  providers 地理栈后端              │
+ │  viz       专题图 / 面板预览        │
+ └──────────────────────────────────┘
 ```
 
 设计基石：
 
-1. **Python 内核完全无状态**——所有"会话"由 TS 层的路径引用与 artifact id 表达，
-   内核可被任何宿主以相同协议驱动。
-2. **模型不感知底层算法**——工具入参是 `proximity.buffer` 这类**原语名**，
+1. **Python 内核完全无状态**——"会话"只由文件路径与 artifact id 表达；
+   内核可被任何宿主以同一协议驱动（`python -m geocore run`），mod 只是其中一个宿主。
+2. **mod 不依赖宿主框架内部**——只用 Claude Code 公开的 mod API
+   （`$.tool.register`、`$.process.run`、`$.ui.open`、`$.state`），宿主升级不会牵动内核。
+3. **模型不感知底层算法**——工具入参是 `proximity.buffer` 这类**原语名**，
    绝不是 QGIS/GeoPandas 函数名；后端可整体替换。
-3. **分析与表达分离**——`gis_analyze` 只产生数据与统计，地图由 `gis_visualize` 输出。
+4. **分析与表达分离**——`analyze` 只产生数据与统计，地图由 `visualize` 输出；
+   面板只负责"看"，分析始终在对话里由 Claude 完成。
 
 ## 二、数据世界与七类内核
 
@@ -70,14 +74,14 @@
 
 ## 四、GIS Result Artifact
 
-每次 `gis_analyze` 落盘一个目录，是可追溯的最小单元：
+每次 `analyze` 落盘一个目录，是可追溯的最小单元：
 
 ```text
 <workdir>/artifacts/ar_<时间戳><随机>/
 ├── meta.json    标题/来源/步骤摘要/告警/CRS 决策/intermediate_layers 索引
 ├── plan.json    用户提交的原语操作序列（机器可回放）
 ├── result.gpkg  layer "result" = 最终结果；layer "step_<id>" = 各中间步骤
-└── map.png      （经 gis_visualize 后附加）
+└── map.png      （经 visualize 后附加）
 ```
 
 由此支撑多轮工作流："把刚才候选区域再排除自然保护区"
@@ -105,4 +109,4 @@ QGIS headless 仅留插槽不做实现（本机 QGIS 3.16 过旧，属 Phase 4 �
 - 线/面 zonal 的占比分母是数据全层量：一份数据跨多区会被重复计入，
   `share_pct` 语义是"占全层的比例和"，跨区求和不恒等于 100%（测试已固化该语义）。
 - 大规模最近邻是 O(n×m) 向量化计算，超过 2500 万配对明确拒绝而不是慢死。
-- Raster/网络/空间统计未实现，`gis_inspect.capabilities` 会如实声明当前能力。
+- Raster/网络/空间统计未实现，`inspect` 的 `capabilities` 会如实声明当前能力。

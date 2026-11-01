@@ -51,7 +51,7 @@ def _spec(districts: Path, hospitals: Path) -> dict:
             {"id": "sb", "type": "scalebar", "x": .08, "y": .93, "w": .22, "h": .04},
             {"id": "na", "type": "north", "x": .90, "y": .85, "w": .05, "h": .09},
             {"id": "note", "type": "text", "x": .71, "y": .90, "w": .25, "h": .06,
-             "text": "数据：合成数据\n制图：GeoCore Studio", "size": 7},
+             "text": "数据：合成数据\n制图：GeoCore", "size": 7},
         ],
     }
 

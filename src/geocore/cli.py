@@ -1,9 +1,8 @@
-"""geocore CLI: one JSON request on stdin → one JSON envelope on stdout.
+"""geocore CLI：stdin 一条 JSON 请求 → stdout 一条 JSON 封套。
 
-Usage:
-    echo '{"action":"inspect","path":"..."}' | python -m geocore run --workdir D:/tmp/gis
+    echo '{"action":"inspect","path":"data/x.geojson"}' | python -m geocore run --workdir .
 
-Actions: inspect | analyze | visualize | show | operations | read | list
+Claude Code mod（hooks/kernel.ts）就是通过它驱动内核的；任何宿主都可以用同一协议。
 """
 
 from __future__ import annotations
@@ -14,73 +13,71 @@ import os
 import sys
 import traceback
 from pathlib import Path
+from typing import Callable
+
+ACTIONS = ("inspect", "analyze", "visualize", "compose", "show", "operations", "preview", "list")
+
+
+def _handlers() -> dict[str, Callable[[Path, dict], dict]]:
+    from geocore import api
+
+    return {
+        "inspect": lambda wd, p: api.inspect(p),
+        "analyze": api.analyze,
+        "visualize": api.visualize,
+        "compose": api.compose,
+        "show": lambda wd, p: api.show(wd, p.get("artifact_id")),
+        "operations": lambda wd, p: api.list_operations(),
+        "preview": api.preview,
+        "list": api.list_inventory,
+    }
+
+
+def _emit(envelope: dict) -> None:
+    from geocore.protocol import json_default
+
+    print(json.dumps(envelope, ensure_ascii=False, default=json_default))
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="geocore")
-    parser.add_argument("command", choices=["run"], help="run 一条 JSON 请求")
+    parser.add_argument("command", choices=["run"], help="执行一条 JSON 请求")
     parser.add_argument("--workdir", default=os.environ.get("GEOCORE_WORKDIR"))
     args = parser.parse_args(argv)
 
-    try:
-        # 中文 Windows 默认按本地代码页（GBK）收发：桥协议统一强制 UTF-8。
-        # stdin 不重配会出现中文参数被按 GBK 解码 → 乱码/surrogates。
-        sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-    except Exception:
-        pass
+    # 中文 Windows 默认按 GBK 收发；协议统一 UTF-8
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except Exception:
+            pass
 
-    from geocore.protocol import (
-        envelope_from_exception,
-        error_envelope,
-        json_default,
-        ok_envelope,
-    )
+    from geocore.protocol import envelope_from_exception, error_envelope, ok_envelope
 
     raw = sys.stdin.read()
     try:
         payload = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError as exc:
-        print(json.dumps(error_envelope("E_BAD_REQUEST", f"请求不是合法 JSON：{exc}"),
-                         ensure_ascii=False, default=json_default))
+        _emit(error_envelope("E_BAD_REQUEST", f"请求不是合法 JSON：{exc}"))
+        return 2
+    if not isinstance(payload, dict):
+        _emit(error_envelope("E_BAD_REQUEST", "请求必须是 JSON 对象"))
         return 2
 
     action = str(payload.pop("action", ""))
     workdir = Path(payload.pop("workdir", None) or args.workdir or ".")
-
-    from geocore import api
+    handler = _handlers().get(action)
+    if handler is None:
+        _emit(error_envelope("E_BAD_REQUEST", f"未知 action：{action}",
+                             {"available": list(ACTIONS)}))
+        return 2
 
     try:
-        if action == "inspect":
-            result = api.inspect(payload)
-        elif action == "analyze":
-            result = api.analyze(workdir, payload)
-        elif action == "visualize":
-            result = api.visualize(workdir, payload)
-        elif action == "compose":
-            result = api.compose(workdir, payload)
-        elif action == "show":
-            result = api.show(workdir, payload.get("artifact_id"))
-        elif action == "operations":
-            result = api.list_operations()
-        elif action == "read":
-            result = api.read_layer(workdir, payload)
-        elif action == "list":
-            result = api.list_inventory(workdir, payload)
-        else:
-            from geocore.protocol import error_envelope
-
-            print(json.dumps(
-                error_envelope("E_BAD_REQUEST",
-                               f"未知 action:{action}（可用 inspect/analyze/visualize/show/operations）"),
-                ensure_ascii=False, default=json_default))
-            return 2
-        print(json.dumps(ok_envelope(result), ensure_ascii=False, default=json_default))
+        _emit(ok_envelope(handler(workdir, payload)))
         return 0
-    except Exception as exc:  # 统一出口：桥协议永远收到封套
+    except Exception as exc:  # 统一出口：调用方永远收到封套
         env = envelope_from_exception(exc)
         if env["error"]["code"] == "E_INTERNAL":
             env["error"]["details"]["traceback"] = traceback.format_exc(limit=6)
-        print(json.dumps(env, ensure_ascii=False, default=json_default))
-        return 2 if env["error"]["code"] != "E_INTERNAL" else 1
+        _emit(env)
+        return 1 if env["error"]["code"] == "E_INTERNAL" else 2

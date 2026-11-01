@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geocore"
-version = "0.1.0"
-description = "DSH GeoCore - Agent-native GIS runtime (Phase 1: vector core)"
+version = "0.2.0"
+description = "GeoCore - agent-native GIS runtime (Python kernel of the GeoCore Claude Code mod)"
 requires-python = ">=3.11"
 dependencies = [
   "geopandas>=1.0",

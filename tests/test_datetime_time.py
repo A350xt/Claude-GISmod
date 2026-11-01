@@ -97,7 +97,7 @@ def test_measure_group_by_detail(track_csv: Path, tmp_path: Path):
     assert lengths["A"] == pytest.approx(108.2, abs=3)
 
 
-def test_read_layer_datetime_iso(track_csv: Path, tmp_path: Path):
-    result = api.read_layer(tmp_path, {"source": str(track_csv)})
-    feats = result["geojson"]["features"]
-    assert feats[0]["properties"]["time"].startswith("2024-09-")
+def test_preview_datetime_iso(track_csv: Path, tmp_path: Path):
+    result = api.preview(tmp_path, {"source": str(track_csv)})
+    time_field = next(f for f in result["meta"]["fields"] if f["name"] == "time")
+    assert str(time_field["samples"][0]).startswith("2024-09-")

@@ -124,7 +124,7 @@ def load_raster(path_str: str, band: int = 1) -> RasterFrame:
 
 
 def raster_meta_of(path_str: str) -> dict:
-    """只读元信息（不进内存）：供 gis_inspect 与清单展示。"""
+    """只读元信息（不进内存）：供 inspect 与清单展示。"""
     import rasterio
 
     path = Path(str(path_str))

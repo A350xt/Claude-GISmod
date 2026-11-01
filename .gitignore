@@ -5,31 +5,15 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+.venv/
 
-# Node
-node_modules/
-plugin-geocore/lib/
-
-# 运行期产物（均可由脚本重新生成）
-.tmp-cli/
-.tmp-probe/
-tmp-smoke/
-datasets/demo_out/
-dsh-work/
+# 运行期产物（均可重新生成）
 artifacts/
+.tmp-cli/
+datasets/demo_out/
 
-# 构建产物
-plugin-geocore/lib/
-apps/geocore-studio/dist/
-apps/geocore-studio/web-dist/
+# mod 运行时由 Claude Code 写入的类型文件
+.claude-plugin/types/
 
 # 环境
 .env
-.venv/
-
-# 本机会话/工具产物（与项目源码无关）
-.mimosa/
-.zcode/
-
-# 视觉评审临时截图
-tmp-visual/

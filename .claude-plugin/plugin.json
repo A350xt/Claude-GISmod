@@ -1,0 +1,29 @@
+{
+  "name": "geocore",
+  "version": "0.2.0",
+  "description": "GeoCore GIS：让 Claude 用 inspect / analyze / visualize 三个工具做空间分析，侧边面板看数据、结果和地图",
+  "author": {
+    "name": "A350xt"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "python": {
+      "type": "string",
+      "title": "Python 解释器",
+      "description": "装有 geopandas 等依赖的 Python。留空则依次尝试 GEOCORE_PYTHON、mod 目录的 .venv、系统 python",
+      "default": ""
+    },
+    "workdir": {
+      "type": "string",
+      "title": "工作目录",
+      "description": "分析产物 artifacts/ 写入的目录。留空则用当前会话目录",
+      "default": ""
+    },
+    "timeoutSeconds": {
+      "type": "number",
+      "title": "单次调用超时（秒）",
+      "description": "Python 内核单次调用的最长时间，10–600",
+      "default": 300
+    }
+  }
+}
