@@ -54,29 +54,33 @@ const PREVIEW = (crs?: string) => ({
   },
 })
 
-type Opts = { failWith?: string; hasVenv?: boolean; commands?: string[][] }
+type Opts = { failWith?: string; installed?: boolean; downloadFails?: boolean; commands?: string[][]; registered?: string[] }
 
-/** 站在引擎的位置回答 mod 的调用；process.run 模拟 Python 内核。 */
+/** 站在引擎的位置回答 mod 的调用；process.run 模拟 claude-gis 原生内核与下载命令。 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function engine(on: any, requests: Array<Record<string, unknown>>, opts: Opts = {}) {
-  const hasVenv = opts.hasVenv ?? true
-  let installed = false
+  let present = opts.installed ?? true
   on('command.register', () => ({ value: { command: 'gis' } }))
-  on('tool.register', (_: unknown, e: any) => ({ value: { tool: `mcp__gismod__${e.name}` } }))
+  on('tool.register', (_: unknown, e: any) => {
+    opts.registered?.push(e.name)
+    return { value: { tool: `mcp__gismod__${e.name}` } }
+  })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   on('env.get', (_: unknown, e: any) => ({ value: e.name === 'USERPROFILE' ? 'C:/Users/t' : undefined }))
-  on('fs.exists', () => ({ value: hasVenv || installed }))
+  on('fs.exists', () => ({ value: present }))
   on('process.run', (_: unknown, e: any) => {
     const argv: string[] = e.argv ?? []
     opts.commands?.push(argv)
-    if (argv[1] === '-c') return ran(hasVenv || installed ? 'ok\n' : '', hasVenv || installed ? 0 : 1)
-    if (argv[0] === 'uv') {
-      if (argv[1] === 'pip') installed = true
+    if (argv[1] === '--version') return present ? ran('claude-gis 0.4.0 (GDAL 3.12)') : ran('', 1)
+    if (argv[0] === 'curl') {
+      if (opts.downloadFails) return ran('', 22)
+      present = true
       return ran('')
     }
+    if (['cmd', 'mkdir', 'uname', 'tar', 'unzip', 'chmod'].includes(argv[0]!)) return ran('')
     const req = JSON.parse(String(e.stdin ?? e.init?.stdin ?? '{}'))
     requests.push(req)
     if (opts.failWith)
@@ -93,7 +97,7 @@ function engine(on: any, requests: Array<Record<string, unknown>>, opts: Opts = 
   })
 }
 
-test('inspect 工具把请求交给 Python 内核，结果里不带卡片', async ($, on) => {
+test('inspect 工具把请求交给原生内核，结果里不带卡片', async ($, on) => {
   const requests: Array<Record<string, unknown>> = []
   engine(on, requests)
   await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
@@ -138,16 +142,24 @@ test('分析结果在对话里画成卡片', async ($, on) => {
   }
 })
 
-test('没有可用 Python 时自动用 uv 建环境', async ($, on) => {
+test('本机没有原生内核时从 GitHub Releases 下载', async ($, on) => {
   const commands: string[][] = []
-  engine(on, [], { hasVenv: false, commands })
+  engine(on, [], { installed: false, commands })
   await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
 
   const out = await $.tool.call({ tool: 'mcp__gismod__inspect', path: '/w/roads.geojson' })
   expect(String(out.result)).toContain('"count":22')
-  const uv = commands.filter(c => c[0] === 'uv').map(c => c.slice(0, 2).join(' '))
-  expect(uv).toEqual(['uv --version', 'uv venv', 'uv pip'])
-  expect(commands.find(c => c[1] === 'venv')?.[2]).toBe('C:/Users/t/.claude/gismod/venv')
+  const curl = commands.find(c => c[0] === 'curl')!
+  expect(curl.at(-1)).toBe('https://github.com/A350xt/Claude-GISmod/releases/latest/download/claude-gis-windows-x64.zip')
+  expect(commands.some(c => c[0] === 'tar' && c.includes('C:/Users/t/.claude/gismod/bin/claude-gis-windows-x64'))).toBe(true)
+})
+
+test('下载失败时工具报 E_ENV_SETUP 并给出修复提示', async ($, on) => {
+  engine(on, [], { installed: false, downloadFails: true })
+  await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
+
+  const out = await $.tool.call({ tool: 'mcp__gismod__inspect', path: '/w/roads.geojson' })
+  expect(String(out.deny ?? out.text)).toContain('E_ENV_SETUP')
 })
 
 test('面板：刷新后列出数据集，点选后显示预览', async ($, on) => {
@@ -185,4 +197,18 @@ test('坐标系切换：重新请求预览并显示新坐标系', async ($, on) 
   expect(shown).toContain('EPSG:4326')
   expect(shown).toContain('数据原为 EPSG:32651')
   await ui.unmount()
+})
+
+test('只注册 inspect 和 analyze，并直接调用本机已有的 claude-gis', async ($, on) => {
+  const commands: string[][] = []
+  const registered: string[] = []
+  engine(on, [], { commands, registered })
+  await $.session.start({ cwd: '/w', surface: 'desktop', isInteractive: true })
+  expect(registered).toEqual(['inspect', 'analyze'])
+
+  const out = await $.tool.call({ tool: 'mcp__gismod__inspect', path: '/w/roads.geojson' })
+  expect(String(out.result)).toContain('"count":22')
+  const kernelCall = commands.find(c => c[1] === 'run')!
+  expect(kernelCall[0]).toContain('claude-gis')
+  expect(commands.some(c => c[0] === 'curl')).toBe(false)
 })

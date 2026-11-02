@@ -111,7 +111,7 @@ export async function renderPanel($: EngineInterface, e: RenderInput<'Pane'>, cf
         marginBottom={1}
       >
         <Text color={env.state === 'failed' ? 'error' : 'suggestion'} bold>
-          {env.state === 'failed' ? '✕ Python 环境准备失败' : '◌ 正在准备 Python 环境'}
+          {env.state === 'failed' ? '✕ GIS 内核准备失败' : '◌ 正在准备 GIS 内核'}
         </Text>
         <Text size="footnote">{env.message}</Text>
       </Box>

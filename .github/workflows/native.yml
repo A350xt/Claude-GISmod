@@ -1,0 +1,117 @@
+name: native
+
+# 编译 C++ 原生内核（native/），用黑盒测试（tests/，node --test，CLAUDE_GIS_EXE）验证，
+# 打包 claude-gis + share/proj/proj.db；推送 v* 标签时发布到 GitHub Releases，
+# mod 首次使用时从 releases/latest 下载对应平台的包。
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["native/**", "tests/**", ".github/workflows/native.yml"]
+  pull_request:
+    paths: ["native/**", "tests/**", ".github/workflows/native.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            preset: windows
+            triplet: x64-windows-static
+            asset: claude-gis-windows-x64
+            exe: claude-gis.exe
+          - os: ubuntu-24.04
+            preset: linux
+            triplet: x64-linux
+            asset: claude-gis-linux-x64
+            exe: claude-gis
+          - os: macos-14
+            preset: macos
+            triplet: arm64-osx
+            asset: claude-gis-macos-arm64
+            exe: claude-gis
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('native/vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.triplet }}-
+
+      - name: Bootstrap vcpkg
+        shell: bash
+        run: |
+          mkdir -p vcpkg-cache
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+          if [ "$RUNNER_OS" = "Windows" ]; then ./vcpkg/bootstrap-vcpkg.bat -disableMetrics; else ./vcpkg/bootstrap-vcpkg.sh -disableMetrics; fi
+
+      - name: Build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build autoconf autoconf-archive automake libtool pkg-config
+
+      - name: Build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja autoconf autoconf-archive automake libtool pkg-config
+
+      - name: Configure
+        working-directory: native
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        working-directory: native
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Package
+        shell: bash
+        run: |
+          cmake --install native/build/${{ matrix.preset }} --config Release --prefix "dist/${{ matrix.asset }}"
+          "dist/${{ matrix.asset }}/${{ matrix.exe }}" --version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Black-box tests against the native kernel
+        shell: bash
+        env:
+          CLAUDE_GIS_EXE: ${{ github.workspace }}/dist/${{ matrix.asset }}/${{ matrix.exe }}
+        run: node --test tests/kernel.test.mjs
+
+      - name: Zip
+        shell: bash
+        run: |
+          cd dist
+          if [ "$RUNNER_OS" = "Windows" ]; then 7z a "${{ matrix.asset }}.zip" "./${{ matrix.asset }}/*"; else (cd "${{ matrix.asset }}" && zip -r "../${{ matrix.asset }}.zip" .); fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/*.zip --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes \
+            || gh release upload "${GITHUB_REF_NAME}" dist/*.zip --repo "${GITHUB_REPOSITORY}" --clobber

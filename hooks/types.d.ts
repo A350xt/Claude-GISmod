@@ -57,8 +57,14 @@ export type GeoActivity = {
 
 export type GeoTab = 'data' | 'results'
 
-/** Python 环境状态 */
-export type GeoEnv = { state: 'ready' | 'installing' | 'failed'; message: string; python?: string }
+/** 原生内核状态 */
+export type GeoEnv = {
+  state: 'ready' | 'installing' | 'failed'
+  message: string
+  engine?: 'native'
+  /** claude-gis 可执行文件路径 */
+  path?: string
+}
 
 /** 对话里一次工具调用的结果卡片 */
 export type GeoCard = {

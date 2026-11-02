@@ -20,12 +20,9 @@ import { readCard } from './store'
 const KIND_LABEL: Record<string, string> = {
   'mcp__gismod__inspect': '数据概览',
   'mcp__gismod__analyze': '空间分析',
-  'mcp__gismod__visualize': '专题图',
 }
 
 const GLYPH: Record<string, string> = { vector: '▰', raster: '▦', map: '▣' }
-
-const fileUrl = (p: string) => `file:///${p.replace(/\\/g, '/').replace(/^\/+/, '')}`
 
 export async function renderCard(
   $: EngineInterface,
@@ -34,7 +31,7 @@ export async function renderCard(
 ) {
   const card = await readCard($, e.requestId)
   if (!card) return null
-  const { Box, Text, Button, Link } = $.ui.resolve(e)
+  const { Box, Text, Button } = $.ui.resolve(e)
   const columns = e.viewport?.columns ?? 80
 
   let picture
@@ -117,7 +114,6 @@ export async function renderCard(
           label="在面板中查看"
           onPress={ev => showInPanel($, cfg(), card.artifactId, card.title, ev.surface)}
         />
-        {card.imagePath ? <Link href={fileUrl(card.imagePath)} label="打开原图" /> : ''}
       </Box>
     </Box>
   )

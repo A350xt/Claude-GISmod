@@ -1,16 +1,16 @@
 {
   "name": "gismod",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Claude-GISmod：让 Claude 用 inspect / analyze / visualize 三个工具做 GIS 空间分析，侧边面板看数据、结果和地图，坐标系可切换",
   "author": {
     "name": "A350xt"
   },
   "types": "./hooks/types.d.ts",
   "userConfig": {
-    "python": {
+    "engine": {
       "type": "string",
-      "title": "Python 解释器",
-      "description": "装有 geopandas 等依赖的 Python。留空则依次尝试 CLAUDE_GIS_PYTHON、mod 目录的 .venv、系统 python",
+      "title": "原生内核路径",
+      "description": "claude-gis 可执行文件。留空则依次尝试 CLAUDE_GIS_EXE、开发构建、已下载的版本，再从 GitHub Releases 下载",
       "default": ""
     },
     "workdir": {

@@ -1,0 +1,13 @@
+{
+  "name": "claude-gis",
+  "version-string": "0.4.0",
+  "description": "Claude-GISmod native kernel: stateless GIS engine driven by one JSON request on stdin",
+  "dependencies": [
+    {
+      "name": "gdal",
+      "default-features": false,
+      "features": ["geos", "sqlite3", "png", "iconv"]
+    },
+    "nlohmann-json"
+  ]
+}

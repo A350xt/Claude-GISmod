@@ -1,27 +1,25 @@
 /**
- * Python 内核桥：`python -X utf8 -m claude_gis run`，stdin 一条 JSON 请求，stdout 一条封套。
+ * 内核桥：stdin 一条 JSON 请求，stdout 一条封套。
  *
- * 只用 $.process.run（参数数组、无 shell）。内核源码就在本 mod 的 kernel/ 下，
- * 通过 PYTHONPATH 指过去；解释器由 setup.ts 找到或自动建好。
+ * 只用 $.process.run（参数数组、无 shell）调用 C++ 原生内核 claude-gis；
+ * 内核由 setup.ts 找到或从 GitHub Releases 下载。
  */
 
 import type { EngineInterface } from 'claude-code'
 
-import { ensurePython, kernelEnv } from './setup'
+import { ensureEngine, type Engine } from './setup'
 
 export type KernelAction =
   | 'inspect'
   | 'analyze'
-  | 'visualize'
-  | 'compose'
   | 'show'
   | 'operations'
   | 'preview'
   | 'list'
 
 export type KernelConfig = {
-  /** /config 里设置的解释器；空则自动 */
-  python: string
+  /** /config 里设置的原生内核路径；空则自动 */
+  engine: string
   /** 产物目录 artifacts/ 所在的工作目录 */
   workdir: string
   timeoutMs: number
@@ -63,9 +61,6 @@ function lastEnvelope(stdout: string): Envelope | null {
 function hintsFor(raw: string): string[] {
   const low = raw.toLowerCase()
   const hints: string[] = []
-  if (low.includes('no module named') || raw.includes('ModuleNotFoundError')) {
-    hints.push('解释器缺少地理库：清空 /config 里的 gismod.python 让 mod 自动准备环境，或给该解释器装上 geopandas')
-  }
   if (low.includes('proj.db')) {
     hints.push('PROJ 数据库版本冲突：系统的 PROJ_LIB/PROJ_DATA 指向了别的安装（如 PostGIS）')
   }
@@ -83,33 +78,35 @@ export async function invokeKernel(
   payload: Record<string, unknown>,
   card?: { crs: string; png: boolean },
 ): Promise<{ result: Record<string, unknown>; card: Record<string, unknown> | null }> {
-  let python: string
+  let engine: Engine
   try {
-    python = await ensurePython($, cfg.python)
+    engine = await ensureEngine($, { engine: cfg.engine })
   } catch (err) {
-    throw new KernelError('E_ENV_SETUP', `Python 环境不可用：${err instanceof Error ? err.message : String(err)}`, {
-      hints: ['在 /config → gismod 里指定一个装有 geopandas 的 Python，或安装 uv 后重试'],
+    throw new KernelError('E_ENV_SETUP', `GIS 内核不可用：${err instanceof Error ? err.message : String(err)}`, {
+      hints: ['在 /config → gismod → 原生内核路径 指定 claude-gis，或检查网络后重试（首次需从 GitHub Releases 下载）'],
     })
   }
+  const argv = [engine.exe, 'run', '--workdir', cfg.workdir]
+  const label = engine.exe
 
   let ran
   try {
-    ran = await $.process.run([python, '-X', 'utf8', '-m', 'claude_gis', 'run', '--workdir', cfg.workdir], {
+    ran = await $.process.run(argv, {
       cwd: cfg.workdir,
-      env: await kernelEnv($),
+      env: {},
       stdin: JSON.stringify({ action, ...payload, ...(card ? { _card: card } : {}) }),
       timeoutMs: cfg.timeoutMs,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    throw new KernelError('E_KERNEL_START', `无法运行 Python 内核（${python}）：${msg}`, { hints: hintsFor(msg) })
+    throw new KernelError('E_KERNEL_START', `无法运行 GIS 内核（${label}）：${msg}`, { hints: hintsFor(msg) })
   }
   if (ran.isStdoutTruncated) {
     throw new KernelError('E_KERNEL_OVERSIZED', '内核输出超过 4MB，已截断；请缩小分析范围')
   }
   const env = lastEnvelope(ran.stdout)
   if (!env) {
-    throw new KernelError('E_KERNEL_BROKEN', `Python 内核没有返回合法结果（exit=${ran.exitCode}）`, {
+    throw new KernelError('E_KERNEL_BROKEN', `GIS 内核没有返回合法结果（exit=${ran.exitCode}）`, {
       stderr_tail: ran.stderr.slice(-1500),
       hints: hintsFor(ran.stdout + '\n' + ran.stderr),
     })

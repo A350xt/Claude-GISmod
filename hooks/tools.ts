@@ -1,7 +1,8 @@
 /**
- * 模型可见的三个 GIS 工具：mcp__gismod__inspect / analyze / visualize。
+ * 模型可见的两个 GIS 工具：mcp__gismod__inspect / analyze。
  *
- * 治理铁律：工具面只有这三个。新能力进 analyze 的操作词表，不新增工具。
+ * 治理铁律：工具面只有这两个。新能力进 analyze 的操作词表，不新增工具；
+ * 结果地图由对话卡片与 /gis 面板表达（原生内核不出 PNG 专题图）。
  */
 
 import type { ToolSpec } from 'claude-code'
@@ -100,52 +101,6 @@ export const TOOLS: GeoTool[] = [
           },
         },
         required: ['operations'],
-      },
-    },
-  },
-  {
-    action: 'visualize',
-    verb: '制图',
-    spec: {
-      name: 'visualize',
-      description: [
-        'GIS：把数据或分析结果画成专题地图 PNG（分析用 analyze，表达用本工具）。',
-        'source：artifact_id、artifact_id#步骤id 或数据文件路径。',
-        '矢量 style.mode ∈ single / point / categorical / choropleth：',
-        '- choropleth 需 style.field 为数值列，classification ∈ quantile/equal_interval，classes 2–9，cmap 如 YlOrRd；',
-        '- categorical 可用 style.category_colors {"类别": "#rrggbb"}；point 可用 size_field + size_range [min,max]；',
-        '- base 指定底图层垫在下面，base_style {color, edgecolor, alpha}。',
-        '栅格 source：style.mode = continuous（cmap/vmin/vmax/unit，默认 2–98 百分位拉伸）或 categorical。',
-        '返回 image_path：用 Read 打开它即可亲眼检查地图，再告诉用户。',
-      ].join('\n'),
-      inputSchema: {
-        type: 'object',
-        properties: {
-          source: { type: 'string', description: 'artifact_id 或数据文件绝对路径' },
-          title: { type: 'string', description: '地图标题（支持中文）' },
-          crs: {
-            type: 'string',
-            description: "出图坐标系：'source'（默认，保持数据原坐标系）、'utm'（自动分带，米制）或 'EPSG:4326' / 'EPSG:4490' / 'EPSG:3857' 等",
-          },
-          base: { type: 'string', description: '底图层（artifact_id 或路径）' },
-          base_style: { type: 'object', additionalProperties: true },
-          style: {
-            type: 'object',
-            properties: {
-              mode: { type: 'string', enum: ['single', 'point', 'categorical', 'choropleth', 'continuous'] },
-              field: { type: 'string' },
-              classification: { type: 'string', enum: ['quantile', 'equal_interval'] },
-              classes: { type: 'integer', minimum: 2, maximum: 9 },
-              cmap: { type: 'string' },
-              color: { type: 'string' },
-              category_colors: { type: 'object', additionalProperties: { type: 'string' } },
-              size_field: { type: 'string' },
-              size_range: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
-            },
-            additionalProperties: true,
-          },
-        },
-        required: ['source'],
       },
     },
   },
