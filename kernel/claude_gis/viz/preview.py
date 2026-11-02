@@ -408,3 +408,37 @@ def vector_png(gdf, size_px: int = 560) -> bytes:
         return buf.getvalue()
     finally:
         plt.close(fig)
+
+
+# ---------------------------------------------------------------- 成图缩略
+
+def image_svg(image_path: str, title: str = "") -> tuple[str, bytes]:
+    """把 visualize 出的地图 PNG 缩成卡片（SVG 内嵌）与终端用的小 PNG。"""
+    from PIL import Image as PILImage
+
+    with PILImage.open(image_path) as im:
+        im = im.convert("RGB")
+        w, h = im.size
+        scale = min(1.0, (WIDTH * 1.5) / max(w, 1))
+        im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), PILImage.LANCZOS)
+        png_buf = io.BytesIO()
+        im.save(png_buf, format="PNG", optimize=True)
+        png = png_buf.getvalue()
+        data, mime = png, "png"
+        quality = 85
+        while len(base64.b64encode(data)) > SVG_BUDGET - 1500:
+            buf = io.BytesIO()
+            target = im if quality >= 60 else im.resize((im.width * 3 // 4, im.height * 3 // 4))
+            target.save(buf, format="JPEG", quality=quality, optimize=True)
+            data, mime = buf.getvalue(), "jpeg"
+            quality -= 10
+            if quality < 30:
+                break
+        disp_h = round(WIDTH * im.height / max(im.width, 1))
+    b64 = base64.b64encode(data).decode("ascii")
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {disp_h}" '
+           f'width="{WIDTH}" height="{disp_h}"><title>{_esc(title)}</title>'
+           f'<defs><clipPath id="c"><rect width="{WIDTH}" height="{disp_h}" rx="{RADIUS}"/></clipPath></defs>'
+           f'<image clip-path="url(#c)" width="{WIDTH}" height="{disp_h}" '
+           f'href="data:image/{mime};base64,{b64}"/></svg>')
+    return svg, png

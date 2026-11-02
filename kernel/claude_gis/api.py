@@ -296,6 +296,36 @@ def preview(workdir: Path, payload: dict) -> dict:
     return out
 
 
+def card(workdir: Path, action: str, payload: dict, result: dict, opts: dict) -> dict:
+    """对话内结果卡片：随 inspect / analyze / visualize 的结果一起生成，省一次进程启动。
+
+    opts：{crs?, png?}。返回 {kind, svg, png_base64?, chips...}；生成失败不影响主结果。
+    """
+    import base64
+
+    if action == "visualize" and result.get("image_path"):
+        from claude_gis.viz import preview as pv
+
+        svg, png = pv.image_svg(str(result["image_path"]), str(payload.get("title") or ""))
+        return {
+            "kind": "map",
+            "svg": svg,
+            "png_base64": base64.b64encode(png).decode("ascii") if opts.get("png") else None,
+            "meta": {},
+            "warnings": [],
+        }
+    if action == "analyze" and result.get("artifact_id"):
+        source = str(result["artifact_id"])
+    elif action == "inspect" and payload.get("path"):
+        source = str(payload["path"])
+    else:
+        return {}
+    out = preview(workdir, {"source": source, "crs": opts.get("crs") or "source",
+                            "png": bool(opts.get("png"))})
+    out.pop("source", None)
+    return out
+
+
 def list_inventory(workdir: Path, payload: dict) -> dict:
     """数据集 + artifacts 清单（面板数据源）。
 

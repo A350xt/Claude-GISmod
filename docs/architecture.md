@@ -14,14 +14,16 @@
       ▼
  ┌────────────────────────────────────┐
  │ gismod mod（hooks/，TypeScript）     │  tools.ts   工具说明与参数 schema
- │ 薄适配层 + 侧边面板                  │  kernel.ts  $.process.run 调内核、解析封套、修复提示
- │                                    │  store.ts   面板状态（$.state）
- │                                    │  panel.tsx  面板界面（/gis）
+ │ 薄适配层 + 界面                      │  kernel.ts  $.process.run 调内核、解析封套、修复提示
+ │                                    │  setup.ts   查找 / 自动创建 Python 环境
+ │                                    │  store.ts   状态（$.state）
+ │                                    │  card.tsx   对话内结果卡片
+ │                                    │  panel.tsx  侧边面板（/gis）
  └─────────────────┬──────────────────┘
                    │ stdin / stdout：每个请求一条 JSON 封套，一个 Python 进程
                    ▼
  ┌────────────────────────────────────┐
- │ claude_gis（src/，Python，无状态）    │
+ │ claude_gis（kernel/，Python，无状态） │
  │  runtime    数据读取 / 坐标系与几何修复 / Artifact │
  │  analysis   原语执行器与请求级解析器              │
  │  providers  地理栈后端（GeoPandas/Shapely/pyproj）│
@@ -40,7 +42,18 @@
 4. **分析与表达分离**。`analyze` 只产出数据和统计，地图由 `visualize` 出；
    面板只负责「看」，分析始终在对话里由 Claude 完成。
 
-## 二、侧边面板
+## 二、界面：对话卡片与侧边面板
+
+**对话内结果卡片**。三个工具的请求都带上 `_card` 选项，内核在同一个进程里顺带生成卡片
+（分析 / 概览为地图卡片 SVG，专题图为成图缩略图），只交给界面，不进模型读到的结果。
+mod 按 tool_use_id 存进 `$.state`，并用 `ToolResult` 渲染钩子替换对话里的原始结果块；
+ctrl+o 展开、出错或卡片缺失时交回引擎显示原文。
+
+**Python 环境**。`setup.ts` 依次检查 /config 指定的解释器、`CLAUDE_GIS_PYTHON`、仓库 `.venv`、
+托管环境 `~/.claude/gismod/venv`（用一行 import 探测地理库是否可用）；都不可用时自动在托管位置创建
+（优先 uv，退回 venv + pip），进度写入状态，面板和状态栏显示。并发调用共享同一次准备。
+
+**侧边面板**：
 
 - `/gis` 打开；Claude 第一次 `analyze` / `visualize` 时也会自动打开，并在完成后刷新、选中新结果。
 - 数据来源：内核的 `list` 动作扫描工作目录（深度 ≤ 3，跳过依赖与缓存目录），
@@ -49,7 +62,7 @@
   带坐标格网与刻度、比例尺、指北针、坐标系标签，内嵌亮/暗两套配色；终端改用小 PNG。
 - **显示坐标系**：`preview` 的 `crs` 参数为 `source` / `utm` / 任意 EPSG 串，
   只做显示重投影，不写回数据。Web 墨卡托下比例尺按纬度校正。
-- 面板状态全部放在 `$.state`（契约见 `types/index.d.ts`），mod 重载不丢。
+- 面板状态全部放在 `$.state`（契约见 `hooks/types.d.ts`），mod 重载不丢。
 
 ## 三、数据模型与七类分析
 

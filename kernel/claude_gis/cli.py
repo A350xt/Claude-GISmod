@@ -65,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     action = str(payload.pop("action", ""))
+    card_opts = payload.pop("_card", None)
     workdir = Path(payload.pop("workdir", None) or args.workdir or ".")
     handler = _handlers().get(action)
     if handler is None:
@@ -73,7 +74,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        _emit(ok_envelope(handler(workdir, payload)))
+        request = dict(payload)
+        result = handler(workdir, payload)
+        envelope = ok_envelope(result)
+        if isinstance(card_opts, dict):
+            # 卡片只给界面用，失败不影响主结果
+            from claude_gis import api
+
+            try:
+                envelope["card"] = api.card(workdir, action, request, result, card_opts)
+            except Exception as exc:  # noqa: BLE001
+                envelope["card"] = {"error": f"{type(exc).__name__}: {exc}"}
+        _emit(envelope)
         return 0
     except Exception as exc:  # 统一出口：调用方永远收到封套
         env = envelope_from_exception(exc)

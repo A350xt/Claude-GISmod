@@ -1,16 +1,17 @@
 /** 面板状态（$.state 原子）与读写它们的动作。所有值的类型见 types/index.d.ts。 */
 
-import { atom, read, update } from 'claude-code'
+import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, RenderSurface } from 'claude-code'
 
 import type {
   GeoActivity,
+  GeoCard,
   GeoArtifact,
   GeoDataset,
   GeoInventory,
   GeoPreview,
   GeoTab,
-} from '../types'
+} from './types'
 import { callKernel, describeError, type KernelConfig } from './kernel'
 
 // 结构变化时改 shape 标签：旧版本存下的值会被当作初始值丢弃
@@ -28,6 +29,7 @@ const selected = atom({ plugin: 'gismod', key: 'selected' } as const, null)
 const crs = atom({ plugin: 'gismod', key: 'crs' } as const, 'source')
 const busy = atom({ plugin: 'gismod', key: 'busy' } as const, null)
 const lastError = atom({ plugin: 'gismod', key: 'error' } as const, null)
+const cards = atom({ plugin: 'gismod', key: 'cards' } as const, null, { shape: 'card-1' })
 
 // ------------------------------------------------------------------ 清单
 
@@ -183,6 +185,48 @@ export async function selectSource(
 ): Promise<void> {
   await update($, selected, () => source)
   await loadPreview($, cfg, source, label, surface)
+}
+
+// ------------------------------------------------------------------ 对话内卡片
+
+/** 内核随工具结果返回的卡片 → 界面用的 GeoCard。 */
+export function toCard(
+  tool: string,
+  title: string,
+  raw: Record<string, unknown>,
+  result: Record<string, unknown>,
+): GeoCard | null {
+  if (typeof raw.svg !== 'string') return null
+  const preview = raw as unknown as RawPreview & { kind: 'vector' | 'raster' | 'map' }
+  const steps = Array.isArray(result.summary) ? (result.summary as unknown[]).map(String) : []
+  const warnings = Array.isArray(result.warnings) ? (result.warnings as unknown[]).map(String) : []
+  const isMap = (preview.kind as string) === 'map'
+  return {
+    tool,
+    title,
+    kind: preview.kind,
+    chips: isMap ? (Array.isArray(result.legend) ? (result.legend as unknown[]).map(String).slice(0, 6) : []) : chipsOf(preview as RawPreview),
+    crsLabel: isMap ? '' : (preview.meta?.crs_label ?? ''),
+    svg: preview.svg,
+    png: preview.png_base64 ?? null,
+    steps,
+    warnings: [...new Set(warnings)].slice(0, 4),
+    artifactId: typeof result.artifact_id === 'string' ? result.artifact_id : null,
+    imagePath: typeof result.image_path === 'string' ? result.image_path : null,
+  }
+}
+
+export async function saveCard($: EngineInterface, toolUseId: string, card: GeoCard): Promise<void> {
+  await update($, memberOf(cards, { requestId: toolUseId }), () => card)
+}
+
+/** 绘制时读卡片（读即订阅）。 */
+export async function readCard($: EngineInterface, toolUseId: string): Promise<GeoCard | null> {
+  return read($, memberOf(cards, { requestId: toolUseId }))
+}
+
+export async function currentCrs($: EngineInterface): Promise<string> {
+  return read($, crs)
 }
 
 /** 切换显示坐标系，并用新坐标系重画当前预览。 */

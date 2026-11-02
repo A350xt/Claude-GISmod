@@ -113,3 +113,28 @@ def test_visualize_in_chosen_crs(tmp_path):
                                "title": "墨卡托"})
     assert Path(out["image_path"]).exists()
     assert show(tmp_path, out["artifact_id"])["crs"]["analysis"] == "EPSG:3857"
+
+
+def test_cli_returns_card_beside_result(tmp_path):
+    """_card 选项：结果之外附带卡片，且不进入 result（模型不需要 SVG）。"""
+    import json
+    import subprocess
+    import sys
+
+    req = {"action": "analyze", "_card": {"crs": "EPSG:4326"}, "title": "卡片",
+           "operations": [{"id": "a", "op": "proximity.buffer",
+                           "input": str(SYNTH / "hospitals.geojson"), "distance_m": 500}]}
+    proc = subprocess.run([sys.executable, "-X", "utf8", "-m", "claude_gis", "run", "--workdir", str(tmp_path)],
+                          input=json.dumps(req), capture_output=True, text=True, encoding="utf-8")
+    env = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert env["ok"] and "svg" not in json.dumps(env["result"])
+    assert env["card"]["svg"].startswith("<svg") and env["card"]["meta"]["crs"] == "EPSG:4326"
+
+
+def test_card_for_visualize_is_thumbnail(tmp_path):
+    from claude_gis.api import card, visualize
+
+    res = visualize(tmp_path, {"source": str(SYNTH / "districts.geojson"), "title": "区划"})
+    c = card(tmp_path, "visualize", {"title": "区划"}, res, {"png": True})
+    assert c["kind"] == "map" and len(c["svg"]) <= SVG_BUDGET
+    assert base64.b64decode(c["png_base64"])[1:4] == b"PNG"

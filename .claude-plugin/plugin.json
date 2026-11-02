@@ -5,7 +5,7 @@
   "author": {
     "name": "A350xt"
   },
-  "types": "./types/index.d.ts",
+  "types": "./hooks/types.d.ts",
   "userConfig": {
     "python": {
       "type": "string",

@@ -183,3 +183,6 @@ python -m claude_gis run --workdir <目录>   # stdin:  {"action": "analyze", ..
 | `operations` | 当前可用的操作词表，便于自省 |
 | `list` | 面板清单：`{datasets_dirs: [...]}` → 数据集与 artifacts |
 | `preview` | 面板预览：`{source, crs?, png?}` → 地图卡片 SVG、可选 PNG、摘要；`crs` 只影响显示 |
+
+任何 action 都可以带 `"_card": {"crs": "...", "png": false}`：成功时封套多一个与 `result` 并列的 `card`
+（地图卡片或成图缩略图），供界面显示；卡片生成失败只写进 `card.error`，不影响主结果。

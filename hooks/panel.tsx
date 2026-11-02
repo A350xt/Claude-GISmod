@@ -14,8 +14,9 @@
 
 import type { EngineInterface, RenderInput, RenderSurface } from 'claude-code'
 
-import type { GeoArtifact, GeoDataset, GeoPreview } from '../types'
+import type { GeoArtifact, GeoDataset, GeoPreview } from './types'
 import type { KernelConfig } from './kernel'
+import { readEnv } from './setup'
 import { readPanelState, refreshInventory, selectSource, setCrs, setTab } from './store'
 
 export const PANE_ID = 'gis'
@@ -43,6 +44,28 @@ const FORMAT_LABEL: Record<string, string> = {
   geojson: 'GeoJSON', gpkg: 'GeoPackage', shapefile: 'Shapefile', csv: 'CSV', tif: 'GeoTIFF',
 }
 
+/** 打开面板；返回界面是否放得下。 */
+export async function openPanel($: EngineInterface): Promise<boolean> {
+  const opened = await $.ui.open({ id: PANE_ID, title: 'GIS' })
+  return opened.isPlaced
+}
+
+/** 从对话卡片跳到面板：刷新清单并选中该结果。 */
+export async function showInPanel(
+  $: EngineInterface,
+  cfg: KernelConfig,
+  artifactId: string | null,
+  title: string,
+  surface: RenderSurface,
+): Promise<void> {
+  await openPanel($)
+  await refreshInventory($, cfg)
+  if (artifactId) {
+    await setTab($, 'results')
+    await selectSource($, cfg, artifactId, title, surface)
+  }
+}
+
 function artifactGlyph(a: GeoArtifact): string {
   if (a.kind === 'map') return '▣'
   const t = a.geometryTypes.join(' ')
@@ -57,6 +80,7 @@ export async function renderPanel($: EngineInterface, e: RenderInput<'Pane'>, cf
   const width = e.props.bodyColumns
   const s = await readPanelState($)
   const inv = s.inventory
+  const env = await readEnv($)
 
   // ---------------------------------------------------------------- 头部
   const subtitle = inv
@@ -77,10 +101,29 @@ export async function renderPanel($: EngineInterface, e: RenderInput<'Pane'>, cf
     </Box>
   )
 
+  const envBanner =
+    env && env.state !== 'ready' ? (
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={env.state === 'failed' ? 'error' : 'suggestion'}
+        paddingX={1}
+        marginBottom={1}
+      >
+        <Text color={env.state === 'failed' ? 'error' : 'suggestion'} bold>
+          {env.state === 'failed' ? '✕ Python 环境准备失败' : '◌ 正在准备 Python 环境'}
+        </Text>
+        <Text size="footnote">{env.message}</Text>
+      </Box>
+    ) : (
+      ''
+    )
+
   if (!inv) {
     return (
       <Box flexDirection="column">
         {header}
+        {envBanner}
         {s.error ? (
           errorBox($, e, s.error)
         ) : (
@@ -180,6 +223,7 @@ export async function renderPanel($: EngineInterface, e: RenderInput<'Pane'>, cf
   return (
     <Box flexDirection="column">
       {header}
+      {envBanner}
       {tabs}
       {list}
       {s.error ? errorBox($, e, s.error) : ''}

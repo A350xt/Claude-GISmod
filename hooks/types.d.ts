@@ -57,6 +57,24 @@ export type GeoActivity = {
 
 export type GeoTab = 'data' | 'results'
 
+/** Python 环境状态 */
+export type GeoEnv = { state: 'ready' | 'installing' | 'failed'; message: string; python?: string }
+
+/** 对话里一次工具调用的结果卡片 */
+export type GeoCard = {
+  tool: string
+  title: string
+  kind: 'vector' | 'raster' | 'map'
+  chips: string[]
+  crsLabel: string
+  svg: string
+  png: string | null
+  steps: string[]
+  warnings: string[]
+  artifactId: string | null
+  imagePath: string | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'gismod': {
@@ -69,6 +87,9 @@ declare module 'claude-code' {
       busy: string | null
       error: string | null
       activity: Shaped<GeoActivity[]>
+      env: Shaped<GeoEnv | null>
+      /** 每次工具调用一张卡片，按 tool_use_id 区分 */
+      cards: StateFamily<Shaped<GeoCard | null>>
     }
   }
 }
